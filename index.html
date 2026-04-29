@@ -615,11 +615,107 @@
       </div>
     </section>
 
+      <!-- ══ CALENDARIO ══ -->
+      <section id="mod-calendario" class="module">
+        <div class="page-header">
+          <div class="page-title">CALENDARIO <span>&</span> CITAS</div>
+          <div class="page-desc">Organiza las citas y servicios programados</div>
+        </div>
+
+        <div class="tabs">
+          <button class="tab-btn active" onclick="switchTab('calendario','mes')">📅 Mes</button>
+          <button class="tab-btn" onclick="switchTab('calendario','lista')">📋 Lista</button>
+          <button class="tab-btn" onclick="switchTab('calendario','nueva')">➕ Nueva Cita</button>
+        </div>
+
+        <!-- TAB: VISTA MES -->
+        <div class="tab-panel active" id="tab-calendario-mes">
+          <div class="card" style="padding:1rem;">
+            <!-- Cabecera mes -->
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
+              <button onclick="cambiarMes(-1)" class="btn-secondary" style="padding:0.4rem 0.85rem;">‹</button>
+              <div style="font-family:'Barlow Condensed',sans-serif;font-size:1.3rem;font-weight:800;text-transform:uppercase;letter-spacing:0.05em;" id="cal-mes-titulo">—</div>
+              <button onclick="cambiarMes(1)" class="btn-secondary" style="padding:0.4rem 0.85rem;">›</button>
+            </div>
+            <!-- Días semana -->
+            <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px;margin-bottom:4px;">
+              ${['L','M','X','J','V','S','D'].map(d => `<div style="text-align:center;font-size:0.7rem;font-weight:700;color:var(--text-muted);padding:0.25rem 0;">${d}</div>`).join('')}
+            </div>
+            <!-- Grid días -->
+            <div id="cal-grid" style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px;"></div>
+          </div>
+          <!-- Citas del día seleccionado -->
+          <div id="cal-dia-detalle" style="display:none;">
+            <div class="card">
+              <div class="card-title" id="cal-dia-titulo">CITAS DEL DÍA</div>
+              <div id="cal-dia-citas"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- TAB: LISTA -->
+        <div class="tab-panel" id="tab-calendario-lista">
+          <div id="citas-loading" style="text-align:center;padding:2rem;color:var(--text-muted);"><div class="spinner"></div></div>
+          <div id="citas-lista-container"></div>
+          <div id="citas-empty" class="empty-state" style="display:none;">
+            <div class="empty-state-icon">📅</div>
+            <div class="empty-state-text">No hay citas programadas</div>
+          </div>
+        </div>
+
+        <!-- TAB: NUEVA CITA -->
+        <div class="tab-panel" id="tab-calendario-nueva">
+          <div class="card">
+            <div class="card-title">➕ Nueva Cita</div>
+            <div class="field-group cols-2">
+              <div class="field"><label>Fecha</label><input type="date" id="cita-fecha" /></div>
+              <div class="field"><label>Hora</label><input type="time" id="cita-hora" /></div>
+            </div>
+            <div class="field-group cols-2">
+              <div class="field"><label>Matrícula</label><input type="text" id="cita-matricula" placeholder="0000 AAA" style="text-transform:uppercase;" /></div>
+              <div class="field"><label>Cliente</label><input type="text" id="cita-cliente" placeholder="Nombre del cliente" /></div>
+            </div>
+            <div class="field-group cols-2">
+              <div class="field">
+                <label>Servicio</label>
+                <select id="cita-servicio">
+                  <option value="">Seleccionar...</option>
+                  <option value="Lavado Básico">Lavado Básico</option>
+                  <option value="Lavado Completo">Lavado Completo</option>
+                  <option value="Descontaminación">Descontaminación</option>
+                  <option value="Pulido One Step">Pulido One Step</option>
+                  <option value="Pulido Completo">Pulido Completo</option>
+                  <option value="Sellado / Cera">Sellado / Cera</option>
+                  <option value="Revestimiento Cerámico">Revestimiento Cerámico</option>
+                  <option value="Interior Completo">Interior Completo</option>
+                  <option value="Detailing Completo">Detailing Completo</option>
+                </select>
+              </div>
+              <div class="field">
+                <label>Estado</label>
+                <select id="cita-estado">
+                  <option value="pendiente">Pendiente</option>
+                  <option value="confirmada">Confirmada</option>
+                  <option value="completada">Completada</option>
+                  <option value="cancelada">Cancelada</option>
+                </select>
+              </div>
+            </div>
+            <div class="field">
+              <label>Notas</label>
+              <textarea id="cita-notas" placeholder="Observaciones, peticiones especiales..."></textarea>
+            </div>
+            <button class="btn-action" onclick="crearCita()">Guardar Cita</button>
+          </div>
+        </div>
+      </section>
+
   </main>
 
   <nav class="bottom-nav">
     <button class="nav-item active" id="nav-dashboard" onclick="switchModule('dashboard')"><span class="nav-icon">🏠</span><span>Inicio</span></button>
     <button class="nav-item" id="nav-almacen" onclick="switchModule('almacen')"><span class="nav-icon">🧴</span><span>Almacén</span></button>
+    <button class="nav-item" id="nav-calendario" onclick="switchModule('calendario')"><span class="nav-icon">📅</span><span>Citas</span></button>
     <button class="nav-item" id="nav-operaciones" onclick="switchModule('operaciones')"><span class="nav-icon">🚗</span><span>Ops</span></button>
     <button class="nav-item" id="nav-calidad" onclick="switchModule('calidad')"><span class="nav-icon">📄</span><span>Calidad</span></button>
   </nav>
