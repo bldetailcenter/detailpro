@@ -369,6 +369,65 @@
               </select>
             </div>
           </div>
+
+          <hr class="divider" />
+
+          <!-- MAPA DE DAÑOS -->
+          <div style="font-family:'Barlow Condensed',sans-serif;font-size:1rem;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:var(--text-secondary);margin-bottom:0.5rem;">🗺️ Mapa de Daños</div>
+          <p style="font-size:0.8rem;color:var(--text-muted);margin-bottom:0.75rem;">Toca sobre el vehículo para marcar zonas dañadas. Toca de nuevo para eliminar.</p>
+
+          <div style="display:flex;gap:0.5rem;margin-bottom:0.75rem;flex-wrap:wrap;">
+            <button class="damage-type-btn active" data-type="rayazo" onclick="selectDamageType(this)" style="padding:0.3rem 0.75rem;border-radius:99px;font-size:0.75rem;font-weight:600;border:1px solid #ef4444;background:rgba(239,68,68,0.15);color:#fca5a5;cursor:pointer;">● Rayazo</button>
+            <button class="damage-type-btn" data-type="abollon" onclick="selectDamageType(this)" style="padding:0.3rem 0.75rem;border-radius:99px;font-size:0.75rem;font-weight:600;border:1px solid #f59e0b;background:rgba(245,158,11,0.15);color:#fcd34d;cursor:pointer;">● Abollón</button>
+            <button class="damage-type-btn" data-type="oxidacion" onclick="selectDamageType(this)" style="padding:0.3rem 0.75rem;border-radius:99px;font-size:0.75rem;font-weight:600;border:1px solid #8b5cf6;background:rgba(139,92,246,0.15);color:#c4b5fd;cursor:pointer;">● Oxidación</button>
+            <button class="damage-type-btn" data-type="otro" onclick="selectDamageType(this)" style="padding:0.3rem 0.75rem;border-radius:99px;font-size:0.75rem;font-weight:600;border:1px solid var(--border);background:rgba(255,255,255,0.05);color:var(--text-secondary);cursor:pointer;">● Otro</button>
+            <button onclick="limpiarMapa()" style="padding:0.3rem 0.75rem;border-radius:99px;font-size:0.75rem;font-weight:600;border:1px solid var(--border);background:transparent;color:var(--text-muted);cursor:pointer;margin-left:auto;">🗑 Limpiar</button>
+          </div>
+
+          <div style="position:relative;background:var(--bg-input);border:1px solid var(--border);border-radius:0.5rem;overflow:hidden;touch-action:none;" id="mapa-container">
+            <svg id="mapa-danos" viewBox="0 0 500 220" xmlns="http://www.w3.org/2000/svg" style="width:100%;display:block;cursor:crosshair;" onclick="addDamagePoint(event)">
+              <!-- Silueta coche — vista superior -->
+              <!-- Carrocería principal -->
+              <rect x="60" y="70" width="380" height="100" rx="18" fill="#222" stroke="#444" stroke-width="1.5"/>
+              <!-- Techo / cabina -->
+              <rect x="140" y="45" width="200" height="75" rx="14" fill="#2a2a2a" stroke="#444" stroke-width="1.5"/>
+              <!-- Parabrisas delantero -->
+              <path d="M148,48 L340,48 L325,95 L163,95 Z" fill="#1a1a2e" stroke="#555" stroke-width="1"/>
+              <!-- Luneta trasera -->
+              <path d="M163,95 L325,95 L318,118 L170,118 Z" fill="#1a1a2e" stroke="#555" stroke-width="1" opacity="0.6"/>
+              <!-- Rueda delantera izq -->
+              <ellipse cx="135" cy="175" rx="30" ry="14" fill="#111" stroke="#555" stroke-width="2"/>
+              <ellipse cx="135" cy="175" rx="18" ry="8" fill="#1a1a1a" stroke="#666" stroke-width="1"/>
+              <!-- Rueda trasera izq -->
+              <ellipse cx="365" cy="175" rx="30" ry="14" fill="#111" stroke="#555" stroke-width="2"/>
+              <ellipse cx="365" cy="175" rx="18" ry="8" fill="#1a1a1a" stroke="#666" stroke-width="1"/>
+              <!-- Rueda delantera der -->
+              <ellipse cx="135" cy="55" rx="30" ry="14" fill="#111" stroke="#555" stroke-width="2"/>
+              <ellipse cx="135" cy="55" rx="18" ry="8" fill="#1a1a1a" stroke="#666" stroke-width="1"/>
+              <!-- Rueda trasera der -->
+              <ellipse cx="365" cy="55" rx="30" ry="14" fill="#111" stroke="#555" stroke-width="2"/>
+              <ellipse cx="365" cy="55" rx="18" ry="8" fill="#1a1a1a" stroke="#666" stroke-width="1"/>
+              <!-- Faro delantero -->
+              <rect x="62" y="78" width="28" height="20" rx="4" fill="#1a1a2e" stroke="#f97316" stroke-width="1"/>
+              <!-- Faro trasero -->
+              <rect x="410" y="78" width="28" height="20" rx="4" fill="#1a1a2e" stroke="#ef4444" stroke-width="1"/>
+              <!-- Faro delantero der -->
+              <rect x="62" y="132" width="28" height="20" rx="4" fill="#1a1a2e" stroke="#f97316" stroke-width="1"/>
+              <!-- Faro trasero der -->
+              <rect x="410" y="132" width="28" height="20" rx="4" fill="#1a1a2e" stroke="#ef4444" stroke-width="1"/>
+              <!-- Etiquetas -->
+              <text x="38" y="118" font-size="9" fill="#555" text-anchor="middle" font-family="sans-serif">DEL</text>
+              <text x="462" y="118" font-size="9" fill="#555" text-anchor="middle" font-family="sans-serif">TRA</text>
+              <!-- Puntos de daño se añaden aquí -->
+              <g id="damage-points"></g>
+            </svg>
+          </div>
+
+          <div id="danos-lista" style="margin-top:0.75rem;display:none;">
+            <div style="font-size:0.72rem;font-weight:600;letter-spacing:0.09em;text-transform:uppercase;color:var(--text-muted);margin-bottom:0.4rem;">Daños marcados</div>
+            <div id="danos-lista-items" style="display:flex;flex-wrap:wrap;gap:0.4rem;"></div>
+          </div>
+
           <hr class="divider" />
           <div style="font-family:'Barlow Condensed',sans-serif;font-size:1rem;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:var(--text-secondary);margin-bottom:0.75rem;">Productos Utilizados</div>
           <div style="display:grid;grid-template-columns:1fr 90px 34px;gap:0.5rem;margin-bottom:0.4rem;">
