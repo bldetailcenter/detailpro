@@ -261,6 +261,50 @@
         </div>
       </div>
     </section>
+
+    <!-- ══ HISTÓRICO ══ -->
+    <section id="mod-historico" class="module">
+      <div class="page-header">
+        <div class="page-title">HISTÓRICO <span>&</span> BÚSQUEDA</div>
+        <div class="page-desc">Consulta todos los servicios realizados por matrícula o cliente</div>
+      </div>
+
+      <div class="card">
+        <div style="display:grid;grid-template-columns:1fr 44px;gap:0.5rem;align-items:end;">
+          <div class="field" style="margin:0;">
+            <label>Buscar matrícula o cliente</label>
+            <input type="text" id="busqueda-input" placeholder="Ej: 1234 ABC o Juan García" onkeydown="if(event.key==='Enter') buscarHistorico()" style="text-transform:uppercase;" />
+          </div>
+          <button class="btn-action" onclick="buscarHistorico()" style="padding:0.65rem;">🔍</button>
+        </div>
+      </div>
+
+      <div id="historico-resultado" style="display:none;">
+        <!-- Resumen -->
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:0.75rem;margin-bottom:1rem;">
+          <div class="stat-card"><div class="stat-label">Visitas</div><div class="stat-value" id="hist-visitas">—</div></div>
+          <div class="stat-card"><div class="stat-label">Total Facturado</div><div class="stat-value highlight" id="hist-facturado">—</div></div>
+          <div class="stat-card"><div class="stat-label">Último Servicio</div><div class="stat-value" id="hist-ultimo" style="font-size:1rem;"></div></div>
+        </div>
+        <!-- Botón PDF -->
+        <button class="btn-action" onclick="generarPDFHistorico()" style="width:100%;margin-bottom:1rem;display:flex;align-items:center;justify-content:center;gap:0.5rem;">
+          📄 Exportar Historial Completo en PDF
+        </button>
+        <!-- Intervenciones -->
+        <div id="historico-lista"></div>
+      </div>
+
+      <div id="historico-empty" class="empty-state" style="display:none;">
+        <div class="empty-state-icon">🔍</div>
+        <div class="empty-state-text">Sin resultados para esa búsqueda</div>
+      </div>
+
+      <div id="historico-inicial" class="empty-state">
+        <div class="empty-state-icon">🚗</div>
+        <div class="empty-state-text">Introduce una matrícula o nombre de cliente</div>
+      </div>
+    </section>
+
     <section id="mod-almacen" class="module">
       <div class="page-header">
         <div class="page-title">ALMACÉN <span>&</span> INVENTARIO</div>
@@ -723,6 +767,7 @@
     <button class="nav-item" id="nav-almacen" onclick="switchModule('almacen')"><span class="nav-icon">🧴</span><span>Almacén</span></button>
     <button class="nav-item" id="nav-calendario" onclick="switchModule('calendario')"><span class="nav-icon">📅</span><span>Citas</span></button>
     <button class="nav-item" id="nav-operaciones" onclick="switchModule('operaciones')"><span class="nav-icon">🚗</span><span>Ops</span></button>
+    <button class="nav-item" id="nav-historico" onclick="switchModule('historico')"><span class="nav-icon">🔍</span><span>Búsqueda</span></button>
     <button class="nav-item" id="nav-calidad" onclick="switchModule('calidad')"><span class="nav-icon">📄</span><span>Calidad</span></button>
   </nav>
 </div>
