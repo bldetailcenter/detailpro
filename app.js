@@ -205,6 +205,16 @@ async function cargarProductos() {
   document.getElementById('stat-total-categorias').textContent = cats.size;
 }
 
+function stockStatus(stock, formato) {
+  // Umbrales: crítico < 10% del formato, bajo < 25%
+  const critico = (formato || 1000) * 0.10;
+  const bajo    = (formato || 1000) * 0.25;
+  if (stock <= 0)       return { color: 'var(--danger)',  icon: '🔴', label: 'Agotado' };
+  if (stock < critico)  return { color: 'var(--danger)',  icon: '🔴', label: 'Crítico' };
+  if (stock < bajo)     return { color: '#f59e0b',        icon: '🟡', label: 'Bajo' };
+  return                       { color: 'var(--success)', icon: '🟢', label: 'OK' };
+}
+
 function renderProductosTable(productos) {
   const tbody = document.getElementById('productos-tbody');
   const wrap  = document.getElementById('productos-table-wrap');
@@ -212,21 +222,68 @@ function renderProductosTable(productos) {
 
   if (!productos.length) { empty.style.display = 'block'; wrap.style.display = 'none'; return; }
 
+  // Alertas stock bajo
+  const alertas = productos.filter(p => {
+    const s = stockStatus(p.stock_actual ?? 0, p.formato_ml);
+    return s.label === 'Crítico' || s.label === 'Agotado' || s.label === 'Bajo';
+  });
+  renderAlertasStock(alertas);
+
   wrap.style.display = 'block';
-  tbody.innerHTML = productos.map(p => {
-    const stock = p.stock_actual ?? 0;
-    const stockStyle = stock < 200 ? 'color:var(--danger)' : 'color:var(--text-secondary)';
+  // Ordenar: primero los de stock crítico
+  const sorted = [...productos].sort((a, b) => {
+    const sa = stockStatus(a.stock_actual ?? 0, a.formato_ml);
+    const sb = stockStatus(b.stock_actual ?? 0, b.formato_ml);
+    const order = { 'Agotado': 0, 'Crítico': 1, 'Bajo': 2, 'OK': 3 };
+    return (order[sa.label] ?? 3) - (order[sb.label] ?? 3);
+  });
+
+  tbody.innerHTML = sorted.map(p => {
+    const stock  = p.stock_actual ?? 0;
+    const status = stockStatus(stock, p.formato_ml);
+    const dosisRestantes = p.dosis_estandar_ml > 0 ? Math.floor(stock / p.dosis_estandar_ml) : '—';
     return `<tr>
       <td>
         <div style="font-weight:600;">${p.nombre_comercial}</div>
         <div style="font-size:0.73rem;color:var(--text-muted);">${p.nombre_interno}</div>
       </td>
       <td><span class="badge badge-gray">${capitalize(p.categoria||'—')}</span></td>
-      <td><span style="${stockStyle}">${fmt(stock,0)} ml</span></td>
+      <td>
+        <div style="color:${status.color};font-weight:600;">${fmt(stock,0)} ml</div>
+        <div style="font-size:0.72rem;color:var(--text-muted);">${dosisRestantes} dosis</div>
+      </td>
+      <td><span style="font-size:0.9rem;">${status.icon}</span> <span style="font-size:0.72rem;color:${status.color};">${status.label}</span></td>
       <td class="highlight">${fmt(p.precio_medio_litro,4)} €</td>
       <td>${fmt(p.precio_por_dosis,4)} €</td>
     </tr>`;
   }).join('');
+}
+
+function renderAlertasStock(alertas) {
+  // Eliminar alerta previa si existe
+  document.getElementById('stock-alertas')?.remove();
+  if (!alertas.length) return;
+
+  const div = document.createElement('div');
+  div.id = 'stock-alertas';
+  div.style.cssText = 'background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.25);border-radius:0.6rem;padding:0.85rem 1rem;margin-bottom:1rem;';
+
+  const titulo = document.createElement('div');
+  titulo.style.cssText = 'font-family:"Barlow Condensed",sans-serif;font-size:0.9rem;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:#fca5a5;margin-bottom:0.5rem;';
+  titulo.textContent = `⚠️ ${alertas.length} producto${alertas.length > 1 ? 's' : ''} con stock bajo`;
+  div.appendChild(titulo);
+
+  alertas.forEach(p => {
+    const s = stockStatus(p.stock_actual ?? 0, p.formato_ml);
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;justify-content:space-between;font-size:0.82rem;padding:0.2rem 0;';
+    row.innerHTML = `<span style="color:var(--text-secondary);">${s.icon} ${p.nombre_comercial}</span><span style="color:${s.color};font-weight:600;">${fmt(p.stock_actual??0,0)} ml — ${s.label}</span>`;
+    div.appendChild(row);
+  });
+
+  // Insertar antes de la tabla
+  const card = document.getElementById('productos-table-wrap').closest('.card');
+  card.insertBefore(div, card.firstChild);
 }
 
 // ═══════════════════════════════════════════════════════════
