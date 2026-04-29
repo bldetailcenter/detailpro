@@ -61,6 +61,7 @@ function switchModule(mod) {
   if (mod === 'operaciones') cargarIntervenciones();
   if (mod === 'calidad')     cargarCalidad();
   if (mod === 'dashboard')   cargarDashboard();
+  if (mod === 'calendario')  iniciarCalendario();
 }
 
 function switchTab(modulo, tab) {
@@ -1343,4 +1344,250 @@ async function completarTarea(id) {
   await db.from('tareas').update({ completada: true }).eq('id', id);
   showToast('✓ Tarea completada');
   cargarDashboard();
+}
+
+// ═══════════════════════════════════════════════════════════
+//  MÓDULO CALENDARIO
+// ═══════════════════════════════════════════════════════════
+
+let calMesActual  = new Date().getMonth();
+let calAnoActual  = new Date().getFullYear();
+let citasCache    = [];
+let diaSeleccionado = null;
+
+const MESES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+const ESTADO_CITA = {
+  pendiente:  { color: '#f59e0b', label: 'Pendiente' },
+  confirmada: { color: '#22c55e', label: 'Confirmada' },
+  completada: { color: '#6b7280', label: 'Completada' },
+  cancelada:  { color: '#ef4444', label: 'Cancelada'  },
+};
+
+async function iniciarCalendario() {
+  // Fecha por defecto en nueva cita
+  const hoy = new Date().toISOString().split('T')[0];
+  const fc = document.getElementById('cita-fecha');
+  if (fc && !fc.value) fc.value = hoy;
+
+  await cargarCitas();
+  renderCalendario();
+}
+
+async function cargarCitas() {
+  const { data, error } = await db
+    .from('citas')
+    .select('*')
+    .order('fecha', { ascending: true })
+    .order('hora',  { ascending: true });
+
+  if (!error) citasCache = data || [];
+  renderListaCitas(citasCache);
+}
+
+function cambiarMes(dir) {
+  calMesActual += dir;
+  if (calMesActual > 11) { calMesActual = 0;  calAnoActual++; }
+  if (calMesActual < 0)  { calMesActual = 11; calAnoActual--; }
+  diaSeleccionado = null;
+  document.getElementById('cal-dia-detalle').style.display = 'none';
+  renderCalendario();
+}
+
+function renderCalendario() {
+  document.getElementById('cal-mes-titulo').textContent =
+    `${MESES[calMesActual]} ${calAnoActual}`;
+
+  const grid        = document.getElementById('cal-grid');
+  const primerDia   = new Date(calAnoActual, calMesActual, 1);
+  const ultimoDia   = new Date(calAnoActual, calMesActual + 1, 0).getDate();
+  // Lunes = 0 ... Domingo = 6
+  let offsetInicio  = primerDia.getDay() - 1;
+  if (offsetInicio < 0) offsetInicio = 6;
+
+  const hoy    = new Date();
+  const esHoy  = (d) => d === hoy.getDate() && calMesActual === hoy.getMonth() && calAnoActual === hoy.getFullYear();
+
+  // Agrupar citas por día
+  const citasPorDia = {};
+  citasCache.forEach(c => {
+    if (!c.fecha) return;
+    const [y, m, d] = c.fecha.split('-').map(Number);
+    if (y === calAnoActual && m - 1 === calMesActual) {
+      if (!citasPorDia[d]) citasPorDia[d] = [];
+      citasPorDia[d].push(c);
+    }
+  });
+
+  let html = '';
+  // Celdas vacías inicio
+  for (let i = 0; i < offsetInicio; i++) {
+    html += `<div style="min-height:44px;"></div>`;
+  }
+  // Días del mes
+  for (let d = 1; d <= ultimoDia; d++) {
+    const citas   = citasPorDia[d] || [];
+    const activo  = diaSeleccionado === d;
+    const today   = esHoy(d);
+    const dotHTML = citas.slice(0, 3).map(c => {
+      const col = ESTADO_CITA[c.estado]?.color || 'var(--accent)';
+      return `<div style="width:5px;height:5px;border-radius:50%;background:${col};flex-shrink:0;"></div>`;
+    }).join('');
+
+    html += `
+      <div onclick="seleccionarDia(${d})" style="
+        min-height:44px;border-radius:0.4rem;padding:0.35rem 0.25rem;
+        cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:3px;
+        background:${activo ? 'var(--accent)' : today ? 'rgba(249,115,22,0.12)' : 'var(--bg-input)'};
+        border:1px solid ${activo ? 'var(--accent)' : today ? 'rgba(249,115,22,0.4)' : 'transparent'};
+        transition:all 0.15s;">
+        <span style="font-size:0.82rem;font-weight:${today||activo?'700':'400'};color:${activo?'#fff':today?'var(--accent)':'var(--text-primary)'};">${d}</span>
+        <div style="display:flex;gap:2px;flex-wrap:wrap;justify-content:center;">${dotHTML}</div>
+      </div>`;
+  }
+  grid.innerHTML = html;
+}
+
+function seleccionarDia(dia) {
+  diaSeleccionado = dia;
+  renderCalendario();
+
+  const fecha = `${calAnoActual}-${String(calMesActual+1).padStart(2,'0')}-${String(dia).padStart(2,'0')}`;
+  const citas = citasCache.filter(c => c.fecha === fecha);
+
+  const detalle = document.getElementById('cal-dia-detalle');
+  const titulo  = document.getElementById('cal-dia-titulo');
+  const cont    = document.getElementById('cal-dia-citas');
+
+  titulo.textContent = `${dia} DE ${MESES[calMesActual].toUpperCase()}`;
+
+  if (!citas.length) {
+    cont.innerHTML = `
+      <div style="color:var(--text-muted);font-size:0.85rem;padding:0.5rem 0;">Sin citas este día.</div>
+      <button class="btn-secondary" style="margin-top:0.5rem;font-size:0.82rem;" onclick="prepararNuevaCitaDia('${fecha}')">+ Añadir cita</button>`;
+  } else {
+    cont.innerHTML = citas.map(c => {
+      const ec = ESTADO_CITA[c.estado] || ESTADO_CITA.pendiente;
+      return `
+        <div style="display:flex;gap:0.75rem;align-items:flex-start;padding:0.65rem 0;border-bottom:1px solid var(--border);">
+          <div style="width:3px;border-radius:2px;background:${ec.color};align-self:stretch;flex-shrink:0;"></div>
+          <div style="flex:1;">
+            <div style="display:flex;justify-content:space-between;align-items:center;">
+              <span style="font-family:'Barlow Condensed',sans-serif;font-size:1rem;font-weight:700;">${c.hora ? c.hora.slice(0,5) : '—'} · ${c.matricula || '—'}</span>
+              <span style="font-size:0.7rem;padding:0.15rem 0.5rem;border-radius:99px;background:${ec.color}22;color:${ec.color};">${ec.label}</span>
+            </div>
+            <div style="font-size:0.82rem;color:var(--text-secondary);">${c.cliente_nombre || '—'}</div>
+            <div style="font-size:0.78rem;color:var(--text-muted);">${c.servicio || '—'}</div>
+            ${c.notas ? `<div style="font-size:0.75rem;color:var(--text-muted);margin-top:0.2rem;">${c.notas}</div>` : ''}
+          </div>
+          <button onclick="eliminarCita('${c.id}')" class="btn-remove" style="flex-shrink:0;">✕</button>
+        </div>`;
+    }).join('');
+    cont.innerHTML += `<button class="btn-secondary" style="margin-top:0.75rem;font-size:0.82rem;width:100%;" onclick="prepararNuevaCitaDia('${fecha}')">+ Añadir otra cita</button>`;
+  }
+
+  detalle.style.display = 'block';
+  detalle.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function prepararNuevaCitaDia(fecha) {
+  // Cambiar a tab nueva cita con la fecha prerellenada
+  const btns = document.querySelectorAll('#mod-calendario .tab-btn');
+  document.querySelectorAll('#mod-calendario .tab-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('#mod-calendario .tab-panel').forEach(p => p.classList.remove('active'));
+  btns[2].classList.add('active');
+  document.getElementById('tab-calendario-nueva').classList.add('active');
+  document.getElementById('cita-fecha').value = fecha;
+}
+
+function renderListaCitas(citas) {
+  const loading   = document.getElementById('citas-loading');
+  const container = document.getElementById('citas-lista-container');
+  const empty     = document.getElementById('citas-empty');
+
+  if (loading) loading.style.display = 'none';
+
+  const proximas = citas.filter(c => c.fecha >= new Date().toISOString().split('T')[0] && c.estado !== 'cancelada' && c.estado !== 'completada');
+  const pasadas  = citas.filter(c => c.fecha < new Date().toISOString().split('T')[0] || c.estado === 'completada' || c.estado === 'cancelada');
+
+  if (!citas.length) { empty.style.display = 'block'; container.innerHTML = ''; return; }
+  empty.style.display = 'none';
+
+  const renderGrupo = (lista, titulo) => {
+    if (!lista.length) return '';
+    return `
+      <div style="font-family:'Barlow Condensed',sans-serif;font-size:0.85rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--text-muted);margin:1rem 0 0.5rem;">${titulo}</div>
+      ${lista.map(c => {
+        const ec = ESTADO_CITA[c.estado] || ESTADO_CITA.pendiente;
+        return `
+          <div class="compra-card" style="position:relative;">
+            <div style="position:absolute;left:0;top:0;bottom:0;width:3px;border-radius:0.6rem 0 0 0.6rem;background:${ec.color};"></div>
+            <div style="padding-left:0.5rem;">
+              <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+                <div>
+                  <div style="font-family:'Barlow Condensed',sans-serif;font-size:1.1rem;font-weight:700;">${formatFecha(c.fecha)} ${c.hora ? '· '+c.hora.slice(0,5) : ''}</div>
+                  <div style="font-size:0.9rem;font-weight:600;margin-top:0.1rem;">${c.matricula || '—'} · ${c.cliente_nombre || '—'}</div>
+                  <div style="font-size:0.8rem;color:var(--text-muted);">${c.servicio || '—'}</div>
+                  ${c.notas ? `<div style="font-size:0.78rem;color:var(--text-muted);margin-top:0.2rem;">${c.notas}</div>` : ''}
+                </div>
+                <div style="display:flex;flex-direction:column;align-items:flex-end;gap:0.35rem;">
+                  <span style="font-size:0.7rem;padding:0.15rem 0.5rem;border-radius:99px;background:${ec.color}22;color:${ec.color};">${ec.label}</span>
+                  <button onclick="eliminarCita('${c.id}')" style="font-size:0.72rem;background:transparent;border:1px solid var(--border);border-radius:0.3rem;padding:0.2rem 0.5rem;color:var(--text-muted);cursor:pointer;">Eliminar</button>
+                </div>
+              </div>
+            </div>
+          </div>`;
+      }).join('')}`;
+  };
+
+  container.innerHTML = renderGrupo(proximas, '📅 Próximas') + renderGrupo(pasadas, '✓ Pasadas / Completadas');
+}
+
+async function crearCita() {
+  const fecha    = document.getElementById('cita-fecha').value;
+  const hora     = document.getElementById('cita-hora').value;
+  const matricula = document.getElementById('cita-matricula').value.trim().toUpperCase();
+  const cliente  = document.getElementById('cita-cliente').value.trim();
+  const servicio = document.getElementById('cita-servicio').value;
+  const estado   = document.getElementById('cita-estado').value;
+  const notas    = document.getElementById('cita-notas').value.trim();
+
+  if (!fecha)    { showToast('Indica la fecha', 'error'); return; }
+  if (!cliente && !matricula) { showToast('Indica al menos cliente o matrícula', 'error'); return; }
+
+  const btn = document.querySelector('[onclick="crearCita()"]');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>'; }
+
+  const { error } = await db.from('citas').insert([{
+    fecha, hora: hora || null, matricula: matricula || null,
+    cliente_nombre: cliente || null, servicio: servicio || null,
+    estado, notas: notas || null
+  }]);
+
+  if (btn) { btn.disabled = false; btn.textContent = 'Guardar Cita'; }
+  if (error) { showToast('Error al guardar la cita', 'error'); return; }
+
+  ['cita-matricula','cita-cliente','cita-notas'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('cita-servicio').value = '';
+  document.getElementById('cita-estado').value   = 'pendiente';
+
+  showToast('✓ Cita guardada');
+  await cargarCitas();
+  renderCalendario();
+
+  // Volver a vista mes
+  const btns = document.querySelectorAll('#mod-calendario .tab-btn');
+  document.querySelectorAll('#mod-calendario .tab-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('#mod-calendario .tab-panel').forEach(p => p.classList.remove('active'));
+  btns[0].classList.add('active');
+  document.getElementById('tab-calendario-mes').classList.add('active');
+}
+
+async function eliminarCita(id) {
+  if (!confirm('¿Eliminar esta cita?')) return;
+  await db.from('citas').delete().eq('id', id);
+  showToast('✓ Cita eliminada');
+  await cargarCitas();
+  renderCalendario();
+  document.getElementById('cal-dia-detalle').style.display = 'none';
+  diaSeleccionado = null;
 }
