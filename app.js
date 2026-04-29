@@ -887,7 +887,7 @@ async function generarPDFCliente() {
   doc.setTextColor(255, 255, 255);
   doc.setFontSize(22);
   doc.setFont('helvetica', 'bold');
-  doc.text('DETAILPRO', 15, 18);
+  doc.text('BL DETAIL CENTER', 15, 18);
 
   doc.setFontSize(10);
   doc.setFont('helvetica', 'normal');
@@ -982,7 +982,7 @@ async function generarPDFCliente() {
   doc.setTextColor(255, 255, 255);
   doc.setFontSize(8);
   doc.setFont('helvetica', 'normal');
-  doc.text('DetailPro — Sistema de Gestión de Calidad y Operaciones', 105, 292, { align: 'center' });
+  doc.text('BL Detail Center — Sistema de Gestión de Calidad y Operaciones', 105, 292, { align: 'center' });
 
   doc.save(`informe_cliente_${inv.matricula}_${inv.created_at.split('T')[0]}.pdf`);
   showToast('✓ PDF cliente generado');
@@ -1023,7 +1023,7 @@ async function generarPDFInterno() {
   doc.setTextColor(...blanco);
   doc.setFontSize(20);
   doc.setFont('helvetica', 'bold');
-  doc.text('INFORME INTERNO DE RENTABILIDAD', 12, 14);
+  doc.text('BL DETAIL CENTER — INFORME INTERNO', 12, 14);
   doc.setFontSize(9);
   doc.setFont('helvetica', 'normal');
   doc.setTextColor(...grisClaro);
@@ -1783,7 +1783,7 @@ async function generarPDFHistorico() {
   doc.rect(0, 283, 5, 14, 'F');
   doc.setTextColor(...grisClaro);
   doc.setFontSize(8);
-  doc.text('DetailPro — Historial de Vehículo · Documento generado automáticamente', 12, 292);
+  doc.text('BL Detail Center — Historial de Vehículo · Documento generado automáticamente', 12, 292);
 
   doc.save(`historial_${q.replace(/\s/g,'_')}_${new Date().toISOString().split('T')[0]}.pdf`);
   showToast('✓ PDF historial generado');
