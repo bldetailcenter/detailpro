@@ -1,0 +1,811 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DetailPro — Sistema de Gestión</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;800&family=Barlow:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-primary: #0a0a0a;
+      --bg-secondary: #111111;
+      --bg-card: #181818;
+      --bg-input: #1e1e1e;
+      --border: #2a2a2a;
+      --accent: #f97316;
+      --accent-dim: rgba(249,115,22,0.15);
+      --accent-glow: rgba(249,115,22,0.4);
+      --text-primary: #f0f0f0;
+      --text-secondary: #888;
+      --text-muted: #555;
+      --success: #22c55e;
+      --danger: #ef4444;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Barlow', sans-serif;
+      background-color: var(--bg-primary);
+      color: var(--text-primary);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    h1, h2, h3, .display {
+      font-family: 'Barlow Condensed', sans-serif;
+      letter-spacing: 0.03em;
+    }
+
+    /* ── LOGIN ── */
+    #login-screen {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background:
+        radial-gradient(ellipse 80% 50% at 50% -10%, rgba(249,115,22,0.12) 0%, transparent 70%),
+        var(--bg-primary);
+      padding: 1.5rem;
+    }
+
+    .login-box {
+      width: 100%;
+      max-width: 420px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 1rem;
+      padding: 2.5rem 2rem;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .login-box::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 3px;
+      background: linear-gradient(90deg, transparent, var(--accent), transparent);
+    }
+
+    .login-logo {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 2.2rem;
+      font-weight: 800;
+      letter-spacing: 0.05em;
+      color: var(--text-primary);
+      margin-bottom: 0.25rem;
+    }
+
+    .login-logo span { color: var(--accent); }
+
+    .login-subtitle {
+      color: var(--text-secondary);
+      font-size: 0.85rem;
+      margin-bottom: 2rem;
+    }
+
+    .form-group { margin-bottom: 1.25rem; }
+
+    .form-label {
+      display: block;
+      font-size: 0.75rem;
+      font-weight: 600;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--text-secondary);
+      margin-bottom: 0.5rem;
+    }
+
+    .form-input {
+      width: 100%;
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      border-radius: 0.5rem;
+      padding: 0.75rem 1rem;
+      color: var(--text-primary);
+      font-family: 'Barlow', sans-serif;
+      font-size: 0.95rem;
+      transition: border-color 0.2s, box-shadow 0.2s;
+      outline: none;
+    }
+
+    .form-input:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-dim);
+    }
+
+    .btn-primary {
+      width: 100%;
+      padding: 0.85rem;
+      background: var(--accent);
+      color: #fff;
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 1.1rem;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      border: none;
+      border-radius: 0.5rem;
+      cursor: pointer;
+      transition: background 0.2s, transform 0.1s, box-shadow 0.2s;
+      margin-top: 0.5rem;
+    }
+
+    .btn-primary:hover {
+      background: #ea6c10;
+      box-shadow: 0 0 20px var(--accent-glow);
+    }
+
+    .btn-primary:active { transform: scale(0.98); }
+
+    .btn-primary:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    #login-error {
+      margin-top: 1rem;
+      padding: 0.75rem 1rem;
+      background: rgba(239,68,68,0.1);
+      border: 1px solid rgba(239,68,68,0.3);
+      border-radius: 0.5rem;
+      color: #fca5a5;
+      font-size: 0.85rem;
+      display: none;
+    }
+
+    /* ── APP SHELL ── */
+    #app-shell { display: none; min-height: 100vh; flex-direction: column; }
+
+    /* TOP BAR */
+    .topbar {
+      background: var(--bg-secondary);
+      border-bottom: 1px solid var(--border);
+      padding: 0 1rem;
+      height: 56px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .topbar-logo {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 1.5rem;
+      font-weight: 800;
+      letter-spacing: 0.05em;
+    }
+
+    .topbar-logo span { color: var(--accent); }
+
+    .topbar-user {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .topbar-email {
+      font-size: 0.78rem;
+      color: var(--text-secondary);
+      display: none;
+    }
+
+    @media (min-width: 640px) { .topbar-email { display: block; } }
+
+    .btn-logout {
+      background: transparent;
+      border: 1px solid var(--border);
+      border-radius: 0.4rem;
+      padding: 0.35rem 0.75rem;
+      color: var(--text-secondary);
+      font-size: 0.78rem;
+      cursor: pointer;
+      transition: all 0.2s;
+      font-family: 'Barlow', sans-serif;
+    }
+
+    .btn-logout:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    /* BOTTOM NAV */
+    .bottom-nav {
+      position: fixed;
+      bottom: 0; left: 0; right: 0;
+      background: var(--bg-secondary);
+      border-top: 1px solid var(--border);
+      display: flex;
+      z-index: 100;
+      padding-bottom: env(safe-area-inset-bottom);
+    }
+
+    .nav-item {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 0.65rem 0;
+      gap: 0.25rem;
+      cursor: pointer;
+      border: none;
+      background: transparent;
+      color: var(--text-muted);
+      font-family: 'Barlow', sans-serif;
+      font-size: 0.65rem;
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      transition: color 0.2s;
+      position: relative;
+    }
+
+    .nav-item.active { color: var(--accent); }
+
+    .nav-item.active::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 20%; right: 20%;
+      height: 2px;
+      background: var(--accent);
+      border-radius: 0 0 2px 2px;
+    }
+
+    .nav-icon { font-size: 1.3rem; }
+
+    /* MAIN CONTENT */
+    .main-content {
+      flex: 1;
+      padding: 1.25rem 1rem 5.5rem;
+      max-width: 900px;
+      width: 100%;
+      margin: 0 auto;
+    }
+
+    /* MODULES */
+    .module { display: none; }
+    .module.active { display: block; }
+
+    /* PAGE HEADER */
+    .page-header {
+      margin-bottom: 1.5rem;
+      padding-bottom: 1rem;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .page-title {
+      font-size: 1.8rem;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .page-title span { color: var(--accent); }
+
+    .page-desc {
+      color: var(--text-secondary);
+      font-size: 0.85rem;
+      margin-top: 0.25rem;
+    }
+
+    /* CARDS */
+    .card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 0.75rem;
+      padding: 1.25rem;
+      margin-bottom: 1rem;
+    }
+
+    .card-title {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 1.1rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--accent);
+      margin-bottom: 1rem;
+    }
+
+    /* FORM ELEMENTS INSIDE APP */
+    .field-group {
+      display: grid;
+      gap: 0.75rem;
+      margin-bottom: 1rem;
+    }
+
+    @media (min-width: 480px) {
+      .field-group.cols-2 { grid-template-columns: 1fr 1fr; }
+      .field-group.cols-3 { grid-template-columns: 1fr 1fr 1fr; }
+    }
+
+    .field label {
+      display: block;
+      font-size: 0.72rem;
+      font-weight: 600;
+      letter-spacing: 0.09em;
+      text-transform: uppercase;
+      color: var(--text-secondary);
+      margin-bottom: 0.4rem;
+    }
+
+    .field input, .field select, .field textarea {
+      width: 100%;
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      border-radius: 0.4rem;
+      padding: 0.65rem 0.85rem;
+      color: var(--text-primary);
+      font-family: 'Barlow', sans-serif;
+      font-size: 0.9rem;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    .field input:focus, .field select:focus, .field textarea:focus {
+      border-color: var(--accent);
+    }
+
+    .field select option { background: var(--bg-card); }
+
+    .btn-action {
+      padding: 0.7rem 1.5rem;
+      background: var(--accent);
+      color: #fff;
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 1rem;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      border: none;
+      border-radius: 0.4rem;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .btn-action:hover {
+      background: #ea6c10;
+      box-shadow: 0 0 16px var(--accent-glow);
+    }
+
+    .btn-action:disabled { opacity: 0.45; cursor: not-allowed; }
+
+    .btn-secondary {
+      padding: 0.7rem 1.25rem;
+      background: transparent;
+      color: var(--text-secondary);
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 0.95rem;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      border: 1px solid var(--border);
+      border-radius: 0.4rem;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .btn-secondary:hover { border-color: var(--accent); color: var(--accent); }
+
+    /* TABLE */
+    .data-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.85rem;
+    }
+
+    .data-table th {
+      text-align: left;
+      font-size: 0.7rem;
+      font-weight: 600;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      padding: 0.6rem 0.75rem;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .data-table td {
+      padding: 0.75rem 0.75rem;
+      border-bottom: 1px solid #1c1c1c;
+      color: var(--text-secondary);
+      vertical-align: middle;
+    }
+
+    .data-table td:first-child { color: var(--text-primary); font-weight: 500; }
+
+    .data-table tr:last-child td { border-bottom: none; }
+
+    .data-table tr:hover td { background: rgba(255,255,255,0.02); }
+
+    .table-wrap { overflow-x: auto; }
+
+    /* BADGE */
+    .badge {
+      display: inline-block;
+      padding: 0.2rem 0.6rem;
+      border-radius: 99px;
+      font-size: 0.7rem;
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    .badge-orange { background: var(--accent-dim); color: var(--accent); }
+    .badge-green { background: rgba(34,197,94,0.12); color: #86efac; }
+    .badge-gray { background: rgba(255,255,255,0.06); color: var(--text-secondary); }
+
+    /* STAT CARD */
+    .stat-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 0.75rem;
+      padding: 1rem 1.25rem;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .stat-card::after {
+      content: '';
+      position: absolute;
+      bottom: 0; left: 0; right: 0;
+      height: 2px;
+      background: linear-gradient(90deg, var(--accent), transparent);
+      opacity: 0.5;
+    }
+
+    .stat-label {
+      font-size: 0.7rem;
+      font-weight: 600;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      margin-bottom: 0.35rem;
+    }
+
+    .stat-value {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 1.7rem;
+      font-weight: 800;
+      color: var(--text-primary);
+    }
+
+    .stat-value small { font-size: 0.9rem; color: var(--text-secondary); font-weight: 400; }
+
+    /* TOAST */
+    #toast {
+      position: fixed;
+      bottom: 5.5rem;
+      left: 50%;
+      transform: translateX(-50%) translateY(10px);
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 0.5rem;
+      padding: 0.75rem 1.25rem;
+      font-size: 0.85rem;
+      color: var(--text-primary);
+      z-index: 999;
+      opacity: 0;
+      transition: all 0.3s;
+      white-space: nowrap;
+      pointer-events: none;
+    }
+
+    #toast.show {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+
+    #toast.success { border-color: var(--success); color: #86efac; }
+    #toast.error { border-color: var(--danger); color: #fca5a5; }
+
+    /* LOADING SPINNER */
+    .spinner {
+      width: 18px; height: 18px;
+      border: 2px solid rgba(255,255,255,0.2);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin 0.6s linear infinite;
+      display: inline-block;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* EMPTY STATE */
+    .empty-state {
+      text-align: center;
+      padding: 3rem 1rem;
+      color: var(--text-muted);
+    }
+
+    .empty-state-icon { font-size: 2.5rem; margin-bottom: 0.75rem; }
+    .empty-state-text { font-size: 0.9rem; }
+
+    /* DIVIDER */
+    .divider {
+      border: none;
+      border-top: 1px solid var(--border);
+      margin: 1rem 0;
+    }
+
+    /* HIGHLIGHT VALUE */
+    .highlight { color: var(--accent); font-weight: 600; }
+
+    /* PMP PREVIEW BOX */
+    .pmp-preview {
+      background: var(--accent-dim);
+      border: 1px solid rgba(249,115,22,0.25);
+      border-radius: 0.5rem;
+      padding: 0.85rem 1rem;
+      font-size: 0.85rem;
+      display: none;
+    }
+
+    .pmp-preview.visible { display: block; }
+
+    .pmp-row {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 0.25rem;
+    }
+
+    .pmp-row:last-child { margin-bottom: 0; }
+    .pmp-row span:first-child { color: var(--text-secondary); }
+    .pmp-row span:last-child { color: var(--accent); font-weight: 600; }
+  </style>
+</head>
+<body>
+
+  <!-- ═══════════════════════════════════════
+       LOGIN SCREEN
+  ═══════════════════════════════════════ -->
+  <div id="login-screen">
+    <div class="login-box">
+      <div class="login-logo">DETAIL<span>PRO</span></div>
+      <div class="login-subtitle">Sistema de Gestión · Calidad & Operaciones</div>
+
+      <div class="form-group">
+        <label class="form-label">Email</label>
+        <input type="email" id="login-email" class="form-input" placeholder="usuario@taller.com" autocomplete="username" />
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Contraseña</label>
+        <input type="password" id="login-password" class="form-input" placeholder="••••••••" autocomplete="current-password" />
+      </div>
+
+      <button id="btn-login" class="btn-primary" onclick="handleLogin()">
+        Entrar al sistema
+      </button>
+
+      <div id="login-error"></div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════
+       APP SHELL
+  ═══════════════════════════════════════ -->
+  <div id="app-shell">
+
+    <!-- TOP BAR -->
+    <nav class="topbar">
+      <div class="topbar-logo">DETAIL<span>PRO</span></div>
+      <div class="topbar-user">
+        <span class="topbar-email" id="user-email-display"></span>
+        <button class="btn-logout" onclick="handleLogout()">Salir</button>
+      </div>
+    </nav>
+
+    <!-- MAIN CONTENT -->
+    <main class="main-content">
+
+      <!-- ── MÓDULO: ALMACÉN ── -->
+      <section id="mod-almacen" class="module active">
+        <div class="page-header">
+          <div class="page-title">ALMACÉN <span>&</span> INVENTARIO</div>
+          <div class="page-desc">Gestión de productos y cálculo de precio medio ponderado</div>
+        </div>
+
+        <!-- Stats row -->
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-bottom: 1rem;" id="almacen-stats">
+          <div class="stat-card">
+            <div class="stat-label">Productos</div>
+            <div class="stat-value" id="stat-total-productos">—</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Categorías</div>
+            <div class="stat-value" id="stat-total-categorias">—</div>
+          </div>
+        </div>
+
+        <!-- AÑADIR PRODUCTO -->
+        <div class="card">
+          <div class="card-title">➕ Nuevo Producto</div>
+
+          <div class="field-group cols-2">
+            <div class="field">
+              <label>Nombre Interno</label>
+              <input type="text" id="prod-nombre-interno" placeholder="Ej: desengrasante_v1" />
+            </div>
+            <div class="field">
+              <label>Nombre Comercial</label>
+              <input type="text" id="prod-nombre-comercial" placeholder="Ej: Koch Chemie GSF" />
+            </div>
+          </div>
+
+          <div class="field-group cols-3">
+            <div class="field">
+              <label>Categoría</label>
+              <select id="prod-categoria">
+                <option value="">Seleccionar...</option>
+                <option value="desengrasante">Desengrasante</option>
+                <option value="shampoo">Shampoo</option>
+                <option value="pulido">Pulido</option>
+                <option value="sellado">Sellado / Cera</option>
+                <option value="interior">Interior</option>
+                <option value="acondicionador">Acondicionador</option>
+                <option value="otro">Otro</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>Formato (ml)</label>
+              <input type="number" id="prod-formato" placeholder="1000" min="1" />
+            </div>
+            <div class="field">
+              <label>Dosis Estándar (ml)</label>
+              <input type="number" id="prod-dosis" placeholder="10" min="0.1" step="0.1" />
+            </div>
+          </div>
+
+          <div class="field-group cols-2">
+            <div class="field">
+              <label>Precio Inicial (€)</label>
+              <input type="number" id="prod-precio-inicial" placeholder="Precio primera compra" min="0" step="0.01" />
+            </div>
+            <div class="field">
+              <label>Stock Inicial (ml)</label>
+              <input type="number" id="prod-stock-inicial" placeholder="ml en stock" min="0" />
+            </div>
+          </div>
+
+          <button class="btn-action" onclick="crearProducto()">Guardar Producto</button>
+        </div>
+
+        <!-- REGISTRAR PEDIDO -->
+        <div class="card">
+          <div class="card-title">📦 Registrar Pedido / Reposición</div>
+          <div class="page-desc" style="margin-bottom:1rem;">Al registrar un pedido, el sistema recalcula automáticamente el PMP y el coste por dosis.</div>
+
+          <div class="field-group cols-2">
+            <div class="field">
+              <label>Producto</label>
+              <select id="pedido-producto" onchange="onPedidoProductoChange()">
+                <option value="">Seleccionar producto...</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>Fecha</label>
+              <input type="date" id="pedido-fecha" />
+            </div>
+          </div>
+
+          <div class="field-group cols-2">
+            <div class="field">
+              <label>Cantidad Comprada (ml)</label>
+              <input type="number" id="pedido-cantidad" placeholder="1000" min="1" oninput="calcularPMPPreview()" />
+            </div>
+            <div class="field">
+              <label>Precio Total Pagado (€)</label>
+              <input type="number" id="pedido-precio" placeholder="0.00" min="0" step="0.01" oninput="calcularPMPPreview()" />
+            </div>
+          </div>
+
+          <!-- PMP PREVIEW -->
+          <div class="pmp-preview" id="pmp-preview">
+            <div class="pmp-row">
+              <span>Nuevo PMP (€/L)</span>
+              <span id="pmp-preview-litro">—</span>
+            </div>
+            <div class="pmp-row">
+              <span>Coste por dosis</span>
+              <span id="pmp-preview-dosis">—</span>
+            </div>
+            <div class="pmp-row">
+              <span>Nuevo stock total</span>
+              <span id="pmp-preview-stock">—</span>
+            </div>
+          </div>
+
+          <div style="margin-top:1rem;">
+            <button class="btn-action" onclick="registrarPedido()">Registrar Pedido</button>
+          </div>
+        </div>
+
+        <!-- LISTADO DE PRODUCTOS -->
+        <div class="card">
+          <div class="card-title">📋 Inventario Actual</div>
+          <div id="productos-loading" style="text-align:center; padding:2rem; color:var(--text-muted);">
+            <div class="spinner"></div>
+          </div>
+          <div class="table-wrap" id="productos-table-wrap" style="display:none;">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Producto</th>
+                  <th>Categoría</th>
+                  <th>Stock (ml)</th>
+                  <th>PMP (€/L)</th>
+                  <th>€/Dosis</th>
+                </tr>
+              </thead>
+              <tbody id="productos-tbody"></tbody>
+            </table>
+          </div>
+          <div id="productos-empty" class="empty-state" style="display:none;">
+            <div class="empty-state-icon">🧴</div>
+            <div class="empty-state-text">No hay productos registrados aún</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ── MÓDULO: OPERACIONES (placeholder) ── -->
+      <section id="mod-operaciones" class="module">
+        <div class="page-header">
+          <div class="page-title">OPERACIONES</div>
+          <div class="page-desc">Fichas de vehículos, intervenciones y registro de incidentes</div>
+        </div>
+        <div class="card">
+          <div class="empty-state">
+            <div class="empty-state-icon">🚗</div>
+            <div class="empty-state-text">Módulo en construcción — Paso 3</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ── MÓDULO: CALIDAD (placeholder) ── -->
+      <section id="mod-calidad" class="module">
+        <div class="page-header">
+          <div class="page-title">CALIDAD <span>&</span> INFORMES</div>
+          <div class="page-desc">Generación de PDFs para cliente e informes de rentabilidad</div>
+        </div>
+        <div class="card">
+          <div class="empty-state">
+            <div class="empty-state-icon">📄</div>
+            <div class="empty-state-text">Módulo en construcción — Paso 4</div>
+          </div>
+        </div>
+      </section>
+
+    </main>
+
+    <!-- BOTTOM NAV -->
+    <nav class="bottom-nav">
+      <button class="nav-item active" id="nav-almacen" onclick="switchModule('almacen')">
+        <span class="nav-icon">🧴</span>
+        <span>Almacén</span>
+      </button>
+      <button class="nav-item" id="nav-operaciones" onclick="switchModule('operaciones')">
+        <span class="nav-icon">🚗</span>
+        <span>Operaciones</span>
+      </button>
+      <button class="nav-item" id="nav-calidad" onclick="switchModule('calidad')">
+        <span class="nav-icon">📄</span>
+        <span>Calidad</span>
+      </button>
+    </nav>
+
+  </div>
+
+  <!-- TOAST -->
+  <div id="toast"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
