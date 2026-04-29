@@ -62,6 +62,7 @@ function switchModule(mod) {
   if (mod === 'calidad')     cargarCalidad();
   if (mod === 'dashboard')   cargarDashboard();
   if (mod === 'calendario')  iniciarCalendario();
+  if (mod === 'historico')   resetHistorico();
 }
 
 function switchTab(modulo, tab) {
@@ -1590,4 +1591,200 @@ async function eliminarCita(id) {
   renderCalendario();
   document.getElementById('cal-dia-detalle').style.display = 'none';
   diaSeleccionado = null;
+}
+
+// ═══════════════════════════════════════════════════════════
+//  MÓDULO HISTÓRICO / BÚSQUEDA
+// ═══════════════════════════════════════════════════════════
+
+function resetHistorico() {
+  document.getElementById('busqueda-input').value = '';
+  document.getElementById('historico-resultado').style.display = 'none';
+  document.getElementById('historico-empty').style.display    = 'none';
+  document.getElementById('historico-inicial').style.display  = 'block';
+}
+
+async function buscarHistorico() {
+  const q = document.getElementById('busqueda-input').value.trim().toUpperCase();
+  if (!q) return;
+
+  document.getElementById('historico-inicial').style.display  = 'none';
+  document.getElementById('historico-empty').style.display    = 'none';
+  document.getElementById('historico-resultado').style.display = 'none';
+
+  // Buscar por matrícula o cliente
+  const { data, error } = await db
+    .from('intervenciones')
+    .select('*')
+    .or(`matricula.ilike.%${q}%,cliente_nombre.ilike.%${q}%`)
+    .order('created_at', { ascending: false });
+
+  if (error || !data || data.length === 0) {
+    document.getElementById('historico-empty').style.display = 'block';
+    return;
+  }
+
+  // Stats resumen
+  const totalFacturado = data.reduce((s, i) => s + (i.precio_cobrado || 0), 0);
+  const ultimo = data[0];
+  document.getElementById('hist-visitas').textContent   = data.length;
+  document.getElementById('hist-facturado').textContent = `${fmt(totalFacturado, 2)} €`;
+  document.getElementById('hist-ultimo').textContent    = ultimo
+    ? new Date(ultimo.created_at).toLocaleDateString('es-ES') : '—';
+
+  // Lista intervenciones
+  const lista = document.getElementById('historico-lista');
+  lista.innerHTML = data.map(inv => {
+    const productos = inv.productos_usados || [];
+    const costeMat  = productos.reduce((s, p) => s + (p.coste || 0), 0);
+    const beneficio = (inv.precio_cobrado || 0) - costeMat;
+
+    return `
+      <div class="compra-card" style="margin-bottom:0.75rem;">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:0.5rem;">
+          <div>
+            <div style="font-family:'Barlow Condensed',sans-serif;font-size:1.2rem;font-weight:800;">${inv.matricula} · ${inv.cliente_nombre}</div>
+            <div style="font-size:0.8rem;color:var(--text-muted);">${new Date(inv.created_at).toLocaleDateString('es-ES')} · ${inv.nombre_servicio || '—'}</div>
+          </div>
+          <div style="text-align:right;">
+            ${estadoBadge(inv.estado)}
+            ${inv.precio_cobrado ? `<div style="font-family:'Barlow Condensed',sans-serif;font-size:1.2rem;font-weight:800;color:var(--accent);margin-top:0.2rem;">${fmt(inv.precio_cobrado,2)} €</div>` : ''}
+          </div>
+        </div>
+        ${productos.length > 0 ? `
+          <div style="border-top:1px solid var(--border);padding-top:0.5rem;">
+            ${productos.map(p => `
+              <div style="display:flex;justify-content:space-between;font-size:0.8rem;padding:0.2rem 0;color:var(--text-secondary);">
+                <span>🧴 ${p.nombre_comercial || p.nombre}</span>
+                <span>${p.ml_usados} ml</span>
+              </div>`).join('')}
+            <div style="display:flex;justify-content:space-between;font-size:0.8rem;padding:0.3rem 0;color:var(--text-muted);border-top:1px solid var(--border);margin-top:0.25rem;">
+              <span>Coste materiales</span><span>${fmt(costeMat,2)} €</span>
+            </div>
+          </div>` : ''}
+        ${inv.incidentes ? `
+          <div style="margin-top:0.5rem;font-size:0.78rem;color:var(--text-muted);background:var(--bg-input);border-radius:0.35rem;padding:0.5rem;">
+            📝 ${inv.incidentes}
+          </div>` : ''}
+      </div>`;
+  }).join('');
+
+  document.getElementById('historico-resultado').style.display = 'block';
+
+  // Guardar datos para PDF
+  window._historicoData = { q, data, totalFacturado };
+}
+
+async function generarPDFHistorico() {
+  const { q, data, totalFacturado } = window._historicoData || {};
+  if (!data || !data.length) return;
+
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
+
+  const naranja   = [249, 115, 22];
+  const gris      = [30, 30, 30];
+  const blanco    = [240, 240, 240];
+  const grisClaro = [180, 180, 180];
+  const negro     = [20, 20, 20];
+
+  // Fondo
+  doc.setFillColor(...gris);
+  doc.rect(0, 0, 210, 297, 'F');
+
+  // Cabecera
+  doc.setFillColor(...negro);
+  doc.rect(0, 0, 210, 32, 'F');
+  doc.setFillColor(...naranja);
+  doc.rect(0, 0, 5, 32, 'F');
+
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(20);
+  doc.setFont('helvetica', 'bold');
+  doc.text('HISTORIAL DE VEHÍCULO', 12, 13);
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(...grisClaro);
+  doc.text(`Búsqueda: ${q}  ·  Generado: ${new Date().toLocaleDateString('es-ES')}`, 12, 22);
+  doc.text(`${data.length} intervención(es)  ·  Total facturado: ${fmt(totalFacturado, 2)} €`, 12, 28);
+
+  let y = 42;
+
+  data.forEach((inv, idx) => {
+    const productos  = inv.productos_usados || [];
+    const costeMat   = productos.reduce((s, p) => s + (p.coste || 0), 0);
+    const beneficio  = (inv.precio_cobrado || 0) - costeMat;
+
+    // Salto de página si no hay espacio
+    if (y > 250) { doc.addPage(); doc.setFillColor(...gris); doc.rect(0, 0, 210, 297, 'F'); y = 20; }
+
+    // Cabecera intervención
+    doc.setFillColor(40, 40, 40);
+    doc.roundedRect(10, y - 5, 190, 12, 2, 2, 'F');
+    doc.setFillColor(...naranja);
+    doc.rect(10, y - 5, 3, 12, 'F');
+
+    doc.setFontSize(11);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(...blanco);
+    doc.text(`${inv.matricula}  ·  ${inv.cliente_nombre}`, 16, y + 2);
+
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(...grisClaro);
+    const fechaStr = new Date(inv.created_at).toLocaleDateString('es-ES');
+    doc.text(`${fechaStr}  ·  ${inv.nombre_servicio || '—'}  ·  ${inv.estado?.toUpperCase()}`, 16, y + 7);
+
+    if (inv.precio_cobrado) {
+      doc.setTextColor(...naranja);
+      doc.setFont('helvetica', 'bold');
+      doc.text(`${fmt(inv.precio_cobrado, 2)} €`, 195, y + 2, { align: 'right' });
+    }
+
+    y += 16;
+
+    // Productos
+    if (productos.length > 0) {
+      productos.forEach(p => {
+        if (y > 270) { doc.addPage(); doc.setFillColor(...gris); doc.rect(0, 0, 210, 297, 'F'); y = 20; }
+        doc.setFontSize(8);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(...grisClaro);
+        doc.text(`  ✓ ${p.nombre_comercial || p.nombre}`, 15, y);
+        doc.text(`${p.ml_usados} ml`, 195, y, { align: 'right' });
+        y += 5;
+      });
+      doc.setTextColor(...[120, 120, 120]);
+      doc.text(`  Coste materiales: ${fmt(costeMat, 2)} €`, 15, y);
+      y += 5;
+    }
+
+    // Incidentes
+    if (inv.incidentes) {
+      if (y > 265) { doc.addPage(); doc.setFillColor(...gris); doc.rect(0, 0, 210, 297, 'F'); y = 20; }
+      doc.setFontSize(8);
+      doc.setTextColor(...[120, 120, 120]);
+      const lines = doc.splitTextToSize(`  📝 ${inv.incidentes}`, 175);
+      doc.text(lines, 15, y);
+      y += lines.length * 4 + 2;
+    }
+
+    // Separador
+    doc.setDrawColor(50, 50, 50);
+    doc.setLineWidth(0.3);
+    doc.line(10, y, 200, y);
+    y += 6;
+  });
+
+  // Footer
+  doc.setFillColor(...negro);
+  doc.rect(0, 283, 210, 14, 'F');
+  doc.setFillColor(...naranja);
+  doc.rect(0, 283, 5, 14, 'F');
+  doc.setTextColor(...grisClaro);
+  doc.setFontSize(8);
+  doc.text('DetailPro — Historial de Vehículo · Documento generado automáticamente', 12, 292);
+
+  doc.save(`historial_${q.replace(/\s/g,'_')}_${new Date().toISOString().split('T')[0]}.pdf`);
+  showToast('✓ PDF historial generado');
 }
