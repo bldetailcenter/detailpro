@@ -547,6 +547,12 @@ async function crearIntervencion() {
     });
   });
 
+  // Recoger mapa de daños
+  const mapaData = damagePoints.length ? damagePoints.map(d => ({
+    id: d.id, x: Math.round(d.x), y: Math.round(d.y),
+    tipo: d.tipo, label: DAMAGE_COLORS[d.tipo]?.label || d.tipo
+  })) : null;
+
   const btn = document.querySelector('[onclick="crearIntervencion()"]');
   if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>'; }
 
@@ -554,6 +560,7 @@ async function crearIntervencion() {
     matricula, cliente_nombre: cliente, servicio_id: null,
     horas_reales: horas, precio_cobrado: precio,
     productos_usados: productosUsados.length ? productosUsados : null,
+    mapa_danos: mapaData,
     incidentes: incidentes || null, estado,
     nombre_servicio: servicio || null
   }]);
@@ -573,6 +580,7 @@ async function crearIntervencion() {
   document.getElementById('int-estado').value   = 'abierta';
   document.getElementById('productos-usados-container').innerHTML = '';
   productoUsadoCount = 0;
+  resetMapaDanos();
 
   showToast('✓ Intervención guardada');
   switchModule('operaciones');
@@ -676,6 +684,47 @@ async function verIntervencion(id) {
           <div style="display:flex;justify-content:space-between;padding:0.4rem 0;font-size:0.85rem;margin-top:0.25rem;">
             <span style="color:var(--text-secondary);">Coste total materiales</span>
             <span class="highlight">${fmt(costeMateriales,4)} €</span>
+          </div>
+        </div>` : ''}
+      ${inv.mapa_danos && inv.mapa_danos.length > 0 ? `
+        <div>
+          <div style="font-size:0.72rem;font-weight:600;letter-spacing:0.09em;text-transform:uppercase;color:var(--text-secondary);margin-bottom:0.5rem;">Mapa de Daños</div>
+          <div style="background:var(--bg-input);border:1px solid var(--border);border-radius:0.4rem;overflow:hidden;position:relative;">
+            <svg viewBox="0 0 500 220" xmlns="http://www.w3.org/2000/svg" style="width:100%;display:block;">
+              <rect x="60" y="70" width="380" height="100" rx="18" fill="#222" stroke="#444" stroke-width="1.5"/>
+              <rect x="140" y="45" width="200" height="75" rx="14" fill="#2a2a2a" stroke="#444" stroke-width="1.5"/>
+              <path d="M148,48 L340,48 L325,95 L163,95 Z" fill="#1a1a2e" stroke="#555" stroke-width="1"/>
+              <path d="M163,95 L325,95 L318,118 L170,118 Z" fill="#1a1a2e" stroke="#555" stroke-width="1" opacity="0.6"/>
+              <ellipse cx="135" cy="175" rx="30" ry="14" fill="#111" stroke="#555" stroke-width="2"/>
+              <ellipse cx="135" cy="175" rx="18" ry="8" fill="#1a1a1a" stroke="#666" stroke-width="1"/>
+              <ellipse cx="365" cy="175" rx="30" ry="14" fill="#111" stroke="#555" stroke-width="2"/>
+              <ellipse cx="365" cy="175" rx="18" ry="8" fill="#1a1a1a" stroke="#666" stroke-width="1"/>
+              <ellipse cx="135" cy="55" rx="30" ry="14" fill="#111" stroke="#555" stroke-width="2"/>
+              <ellipse cx="135" cy="55" rx="18" ry="8" fill="#1a1a1a" stroke="#666" stroke-width="1"/>
+              <ellipse cx="365" cy="55" rx="30" ry="14" fill="#111" stroke="#555" stroke-width="2"/>
+              <ellipse cx="365" cy="55" rx="18" ry="8" fill="#1a1a1a" stroke="#666" stroke-width="1"/>
+              <rect x="62" y="78" width="28" height="20" rx="4" fill="#1a1a2e" stroke="#f97316" stroke-width="1"/>
+              <rect x="410" y="78" width="28" height="20" rx="4" fill="#1a1a2e" stroke="#ef4444" stroke-width="1"/>
+              <rect x="62" y="132" width="28" height="20" rx="4" fill="#1a1a2e" stroke="#f97316" stroke-width="1"/>
+              <rect x="410" y="132" width="28" height="20" rx="4" fill="#1a1a2e" stroke="#ef4444" stroke-width="1"/>
+              <text x="38" y="118" font-size="9" fill="#555" text-anchor="middle" font-family="sans-serif">DEL</text>
+              <text x="462" y="118" font-size="9" fill="#555" text-anchor="middle" font-family="sans-serif">TRA</text>
+              ${inv.mapa_danos.map(d => {
+                const colors = { rayazo:'#ef4444', abollon:'#f59e0b', oxidacion:'#8b5cf6', otro:'#6b7280' };
+                const strokes = { rayazo:'#fca5a5', abollon:'#fcd34d', oxidacion:'#c4b5fd', otro:'#9ca3af' };
+                const c = colors[d.tipo] || '#ef4444';
+                const s = strokes[d.tipo] || '#fca5a5';
+                return `<circle cx="${d.x}" cy="${d.y}" r="10" fill="${c}" fill-opacity="0.75" stroke="${s}" stroke-width="2"/>
+                        <text x="${d.x}" y="${d.y+4}" text-anchor="middle" font-size="9" fill="#fff" font-weight="bold">${d.id}</text>`;
+              }).join('')}
+            </svg>
+          </div>
+          <div style="display:flex;flex-wrap:wrap;gap:0.35rem;margin-top:0.5rem;">
+            ${inv.mapa_danos.map(d => {
+              const colors = { rayazo:'#ef4444', abollon:'#f59e0b', oxidacion:'#8b5cf6', otro:'#6b7280' };
+              const c = colors[d.tipo] || '#ef4444';
+              return `<span style="font-size:0.72rem;padding:0.15rem 0.5rem;border-radius:99px;background:${c}22;border:1px solid ${c}66;color:${c};">${d.id}. ${d.label}</span>`;
+            }).join('')}
           </div>
         </div>` : ''}
       <div>
@@ -1055,4 +1104,114 @@ async function generarPDFInterno() {
 
   doc.save(`rentabilidad_interna_${inv.matricula}_${inv.created_at.split('T')[0]}.pdf`);
   showToast('✓ PDF interno generado');
+}
+
+// ═══════════════════════════════════════════════════════════
+//  MAPA DE DAÑOS
+// ═══════════════════════════════════════════════════════════
+
+let damagePoints  = [];
+let damageCounter = 0;
+let currentDamageType = 'rayazo';
+
+const DAMAGE_COLORS = {
+  rayazo:    { fill: '#ef4444', stroke: '#fca5a5', label: 'Rayazo' },
+  abollon:   { fill: '#f59e0b', stroke: '#fcd34d', label: 'Abollón' },
+  oxidacion: { fill: '#8b5cf6', stroke: '#c4b5fd', label: 'Oxidación' },
+  otro:      { fill: '#6b7280', stroke: '#9ca3af', label: 'Otro' },
+};
+
+function selectDamageType(btn) {
+  document.querySelectorAll('.damage-type-btn').forEach(b => b.style.opacity = '0.45');
+  btn.style.opacity = '1';
+  currentDamageType = btn.dataset.type;
+}
+
+function addDamagePoint(event) {
+  const svg    = document.getElementById('mapa-danos');
+  const rect   = svg.getBoundingClientRect();
+  const vb     = svg.viewBox.baseVal;
+
+  // Convertir coordenadas pantalla → viewBox
+  const scaleX = vb.width  / rect.width;
+  const scaleY = vb.height / rect.height;
+  const x = (event.clientX - rect.left) * scaleX;
+  const y = (event.clientY - rect.top)  * scaleY;
+
+  damageCounter++;
+  const id    = damageCounter;
+  const tipo  = currentDamageType;
+  const color = DAMAGE_COLORS[tipo];
+
+  damagePoints.push({ id, x, y, tipo, label: color.label });
+
+  // Dibujar punto
+  const g = document.getElementById('damage-points');
+
+  const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+  circle.setAttribute('cx', x);
+  circle.setAttribute('cy', y);
+  circle.setAttribute('r', '10');
+  circle.setAttribute('fill', color.fill);
+  circle.setAttribute('fill-opacity', '0.75');
+  circle.setAttribute('stroke', color.stroke);
+  circle.setAttribute('stroke-width', '2');
+  circle.setAttribute('id', `dp-${id}`);
+  circle.style.cursor = 'pointer';
+  circle.setAttribute('onclick', `removeDamagePoint(${id}, event)`);
+  circle.setAttribute('title', color.label);
+
+  const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+  text.setAttribute('x', x);
+  text.setAttribute('y', y + 4);
+  text.setAttribute('text-anchor', 'middle');
+  text.setAttribute('font-size', '9');
+  text.setAttribute('fill', '#fff');
+  text.setAttribute('font-weight', 'bold');
+  text.setAttribute('pointer-events', 'none');
+  text.setAttribute('id', `dt-${id}`);
+  text.textContent = id;
+
+  g.appendChild(circle);
+  g.appendChild(text);
+
+  renderDanosList();
+}
+
+function removeDamagePoint(id, event) {
+  event.stopPropagation();
+  damagePoints = damagePoints.filter(d => d.id !== id);
+  document.getElementById(`dp-${id}`)?.remove();
+  document.getElementById(`dt-${id}`)?.remove();
+  renderDanosList();
+}
+
+function limpiarMapa() {
+  damagePoints = [];
+  damageCounter = 0;
+  document.getElementById('damage-points').innerHTML = '';
+  renderDanosList();
+}
+
+function renderDanosList() {
+  const lista  = document.getElementById('danos-lista');
+  const items  = document.getElementById('danos-lista-items');
+
+  if (!damagePoints.length) { lista.style.display = 'none'; return; }
+
+  lista.style.display = 'block';
+  items.innerHTML = damagePoints.map(d => {
+    const c = DAMAGE_COLORS[d.tipo];
+    return `<span style="display:inline-flex;align-items:center;gap:0.3rem;padding:0.2rem 0.6rem;border-radius:99px;font-size:0.72rem;font-weight:600;background:${c.fill}22;border:1px solid ${c.fill}66;color:${c.stroke};">
+      ${d.id}. ${c.label}
+    </span>`;
+  }).join('');
+}
+
+function resetMapaDanos() {
+  limpiarMapa();
+  document.querySelectorAll('.damage-type-btn').forEach((b, i) => {
+    b.style.opacity = i === 0 ? '1' : '0.45';
+  });
+  currentDamageType = 'rayazo';
 }
