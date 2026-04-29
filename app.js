@@ -59,7 +59,8 @@ function switchModule(mod) {
   document.getElementById(`mod-${mod}`).classList.add('active');
   document.getElementById(`nav-${mod}`).classList.add('active');
   if (mod === 'operaciones') cargarIntervenciones();
-  if (mod === 'calidad') cargarCalidad();
+  if (mod === 'calidad')     cargarCalidad();
+  if (mod === 'dashboard')   cargarDashboard();
 }
 
 function switchTab(modulo, tab) {
@@ -140,7 +141,12 @@ function showApp() {
   document.getElementById('login-screen').style.display = 'none';
   document.getElementById('app-shell').style.display = 'flex';
   document.getElementById('user-email-display').textContent = currentUser?.email || '';
+  // Fecha en dashboard
+  const opts = { weekday:'long', year:'numeric', month:'long', day:'numeric' };
+  const fechaEl = document.getElementById('dash-fecha');
+  if (fechaEl) fechaEl.textContent = new Date().toLocaleDateString('es-ES', opts);
   cargarProductos();
+  cargarDashboard();
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -572,6 +578,18 @@ async function crearIntervencion() {
     showToast('Error al guardar la intervención', 'error'); return;
   }
 
+  // ── Descontar stock automáticamente ──────────────────────
+  for (const pu of productosUsados) {
+    const prod = productosCache.find(p => p.id === pu.id);
+    if (!prod) continue;
+    const nuevoStock = Math.max(0, (prod.stock_actual || 0) - pu.ml_usados);
+    await db.from('productos').update({ stock_actual: nuevoStock }).eq('id', pu.id);
+    prod.stock_actual = nuevoStock; // actualizar cache local
+  }
+  if (productosUsados.length > 0) {
+    cargarProductos(); // refrescar inventario en background
+  }
+
   // Limpiar
   ['int-matricula','int-cliente','int-horas','int-precio','int-incidentes'].forEach(id => {
     document.getElementById(id).value = '';
@@ -582,7 +600,7 @@ async function crearIntervencion() {
   productoUsadoCount = 0;
   resetMapaDanos();
 
-  showToast('✓ Intervención guardada');
+  showToast('✓ Intervención guardada · Stock actualizado');
   switchModule('operaciones');
   switchTabDirect('operaciones', 'lista');
 }
@@ -1214,4 +1232,115 @@ function resetMapaDanos() {
     b.style.opacity = i === 0 ? '1' : '0.45';
   });
   currentDamageType = 'rayazo';
+}
+
+// ═══════════════════════════════════════════════════════════
+//  MÓDULO DASHBOARD
+// ═══════════════════════════════════════════════════════════
+
+async function cargarDashboard() {
+  const ahora   = new Date();
+  const primerDia = new Date(ahora.getFullYear(), ahora.getMonth(), 1).toISOString().split('T')[0];
+  const hoy       = ahora.toISOString().split('T')[0];
+
+  // Lanzar todas las queries en paralelo
+  const [
+    { data: intervMes },
+    { data: intervTotal },
+    { data: productos },
+    { data: tareas }
+  ] = await Promise.all([
+    db.from('intervenciones').select('precio_cobrado, productos_usados, horas_reales, estado').gte('created_at', primerDia),
+    db.from('intervenciones').select('id, matricula, cliente_nombre, nombre_servicio, estado, created_at').order('created_at', { ascending: false }).limit(5),
+    db.from('productos').select('*'),
+    db.from('tareas').select('*').eq('completada', false).order('created_at', { ascending: false })
+  ]);
+
+  // ── Stats del mes ────────────────────────────────────────
+  const totalIngresos  = (intervMes || []).reduce((s, i) => s + (i.precio_cobrado || 0), 0);
+  const totalServicios = (intervMes || []).length;
+  const pendientes     = (intervMes || []).filter(i => i.estado === 'abierta' || i.estado === 'en_proceso').length;
+
+  document.getElementById('dash-ingresos').textContent   = `${fmt(totalIngresos, 2)} €`;
+  document.getElementById('dash-servicios').textContent  = totalServicios;
+  document.getElementById('dash-pendientes').textContent = pendientes;
+
+  // ── Alertas stock ────────────────────────────────────────
+  const stockAlertas = (productos || []).filter(p => {
+    const s = stockStatus(p.stock_actual ?? 0, p.formato_ml);
+    return s.label !== 'OK';
+  });
+  document.getElementById('dash-stock-critico').textContent = stockAlertas.length;
+
+  const alertasContainer = document.getElementById('dash-alertas-lista');
+  if (stockAlertas.length === 0) {
+    alertasContainer.innerHTML = '<div style="color:var(--success);font-size:0.85rem;">✓ Todo el stock en niveles correctos</div>';
+  } else {
+    alertasContainer.innerHTML = stockAlertas.map(p => {
+      const s = stockStatus(p.stock_actual ?? 0, p.formato_ml);
+      return `<div style="display:flex;justify-content:space-between;padding:0.4rem 0;border-bottom:1px solid var(--border);font-size:0.83rem;">
+        <span>${s.icon} ${p.nombre_comercial}</span>
+        <span style="color:${s.color};font-weight:600;">${fmt(p.stock_actual??0,0)} ml · ${s.label}</span>
+      </div>`;
+    }).join('');
+  }
+
+  // ── Últimas intervenciones ───────────────────────────────
+  const ultimasContainer = document.getElementById('dash-ultimas');
+  if (!intervTotal || intervTotal.length === 0) {
+    ultimasContainer.innerHTML = '<div style="color:var(--text-muted);font-size:0.85rem;">Sin intervenciones aún</div>';
+  } else {
+    ultimasContainer.innerHTML = intervTotal.map(i => `
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:0.5rem 0;border-bottom:1px solid var(--border);">
+        <div>
+          <div style="font-family:'Barlow Condensed',sans-serif;font-size:1rem;font-weight:700;">${i.matricula}</div>
+          <div style="font-size:0.75rem;color:var(--text-muted);">${i.cliente_nombre} · ${i.nombre_servicio || '—'}</div>
+        </div>
+        <div style="text-align:right;">
+          ${estadoBadge(i.estado)}
+          <div style="font-size:0.72rem;color:var(--text-muted);margin-top:0.2rem;">${new Date(i.created_at).toLocaleDateString('es-ES')}</div>
+        </div>
+      </div>`).join('');
+  }
+
+  // ── Tareas ───────────────────────────────────────────────
+  renderTareasDashboard(tareas || []);
+}
+
+// ── TAREAS ────────────────────────────────────────────────
+function renderTareasDashboard(tareas) {
+  const container = document.getElementById('dash-tareas-lista');
+  if (!tareas.length) {
+    container.innerHTML = '<div style="color:var(--text-muted);font-size:0.85rem;">No hay tareas pendientes 🎉</div>';
+    return;
+  }
+  const prioColors = { alta: '#ef4444', normal: 'var(--accent)', baja: '#6b7280' };
+  container.innerHTML = tareas.map(t => `
+    <div style="display:flex;align-items:center;gap:0.65rem;padding:0.45rem 0;border-bottom:1px solid var(--border);">
+      <button onclick="completarTarea('${t.id}')" style="width:18px;height:18px;border-radius:50%;border:2px solid ${prioColors[t.prioridad]||'var(--accent)'};background:transparent;cursor:pointer;flex-shrink:0;transition:all 0.2s;" onmouseover="this.style.background='${prioColors[t.prioridad]||'var(--accent)'}'" onmouseout="this.style.background='transparent'"></button>
+      <span style="flex:1;font-size:0.85rem;">${t.texto}</span>
+      <span style="font-size:0.7rem;padding:0.15rem 0.5rem;border-radius:99px;background:${prioColors[t.prioridad]||'var(--accent)'}22;color:${prioColors[t.prioridad]||'var(--accent)'};">${t.prioridad}</span>
+    </div>`).join('');
+}
+
+async function agregarTarea() {
+  const input    = document.getElementById('nueva-tarea-texto');
+  const prioSel  = document.getElementById('nueva-tarea-prio');
+  const texto    = input.value.trim();
+  const prioridad = prioSel.value;
+
+  if (!texto) { showToast('Escribe una tarea', 'error'); return; }
+
+  const { error } = await db.from('tareas').insert([{ texto, prioridad }]);
+  if (error) { showToast('Error al guardar tarea', 'error'); return; }
+
+  input.value = '';
+  showToast('✓ Tarea añadida');
+  cargarDashboard();
+}
+
+async function completarTarea(id) {
+  await db.from('tareas').update({ completada: true }).eq('id', id);
+  showToast('✓ Tarea completada');
+  cargarDashboard();
 }
