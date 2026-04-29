@@ -6,640 +6,243 @@
   <title>DetailPro — Sistema de Gestión</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;800&family=Barlow:wght@300;400;500;600&display=swap" rel="stylesheet">
   <style>
     :root {
-      --bg-primary: #0a0a0a;
-      --bg-secondary: #111111;
-      --bg-card: #181818;
-      --bg-input: #1e1e1e;
-      --border: #2a2a2a;
-      --accent: #f97316;
-      --accent-dim: rgba(249,115,22,0.15);
-      --accent-glow: rgba(249,115,22,0.4);
-      --text-primary: #f0f0f0;
-      --text-secondary: #888;
-      --text-muted: #555;
-      --success: #22c55e;
-      --danger: #ef4444;
+      --bg-primary:#0a0a0a; --bg-secondary:#111111; --bg-card:#181818; --bg-input:#1e1e1e;
+      --border:#2a2a2a; --accent:#f97316; --accent-dim:rgba(249,115,22,0.15);
+      --accent-glow:rgba(249,115,22,0.4); --text-primary:#f0f0f0; --text-secondary:#888;
+      --text-muted:#555; --success:#22c55e; --danger:#ef4444;
     }
+    *{box-sizing:border-box;margin:0;padding:0;}
+    body{font-family:'Barlow',sans-serif;background-color:var(--bg-primary);color:var(--text-primary);min-height:100vh;overflow-x:hidden;}
+    h1,h2,h3{font-family:'Barlow Condensed',sans-serif;letter-spacing:0.03em;}
 
-    * { box-sizing: border-box; margin: 0; padding: 0; }
+    /* LOGIN */
+    #login-screen{min-height:100vh;display:flex;align-items:center;justify-content:center;background:radial-gradient(ellipse 80% 50% at 50% -10%,rgba(249,115,22,0.12) 0%,transparent 70%),var(--bg-primary);padding:1.5rem;}
+    .login-box{width:100%;max-width:420px;background:var(--bg-card);border:1px solid var(--border);border-radius:1rem;padding:2.5rem 2rem;position:relative;overflow:hidden;}
+    .login-box::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,transparent,var(--accent),transparent);}
+    .login-logo{font-family:'Barlow Condensed',sans-serif;font-size:2.2rem;font-weight:800;letter-spacing:0.05em;margin-bottom:0.25rem;}
+    .login-logo span{color:var(--accent);}
+    .login-subtitle{color:var(--text-secondary);font-size:0.85rem;margin-bottom:2rem;}
+    .form-group{margin-bottom:1.25rem;}
+    .form-label{display:block;font-size:0.75rem;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-secondary);margin-bottom:0.5rem;}
+    .form-input{width:100%;background:var(--bg-input);border:1px solid var(--border);border-radius:0.5rem;padding:0.75rem 1rem;color:var(--text-primary);font-family:'Barlow',sans-serif;font-size:0.95rem;transition:border-color 0.2s,box-shadow 0.2s;outline:none;}
+    .form-input:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-dim);}
+    .btn-primary{width:100%;padding:0.85rem;background:var(--accent);color:#fff;font-family:'Barlow Condensed',sans-serif;font-size:1.1rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;border:none;border-radius:0.5rem;cursor:pointer;transition:all 0.2s;margin-top:0.5rem;}
+    .btn-primary:hover{background:#ea6c10;box-shadow:0 0 20px var(--accent-glow);}
+    .btn-primary:disabled{opacity:0.5;cursor:not-allowed;}
+    #login-error{margin-top:1rem;padding:0.75rem 1rem;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);border-radius:0.5rem;color:#fca5a5;font-size:0.85rem;display:none;}
 
-    body {
-      font-family: 'Barlow', sans-serif;
-      background-color: var(--bg-primary);
-      color: var(--text-primary);
-      min-height: 100vh;
-      overflow-x: hidden;
-    }
+    /* APP */
+    #app-shell{display:none;min-height:100vh;flex-direction:column;}
+    .topbar{background:var(--bg-secondary);border-bottom:1px solid var(--border);padding:0 1rem;height:56px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100;}
+    .topbar-logo{font-family:'Barlow Condensed',sans-serif;font-size:1.5rem;font-weight:800;letter-spacing:0.05em;}
+    .topbar-logo span{color:var(--accent);}
+    .topbar-user{display:flex;align-items:center;gap:0.75rem;}
+    .topbar-email{font-size:0.78rem;color:var(--text-secondary);display:none;}
+    @media(min-width:640px){.topbar-email{display:block;}}
+    .btn-logout{background:transparent;border:1px solid var(--border);border-radius:0.4rem;padding:0.35rem 0.75rem;color:var(--text-secondary);font-size:0.78rem;cursor:pointer;transition:all 0.2s;font-family:'Barlow',sans-serif;}
+    .btn-logout:hover{border-color:var(--accent);color:var(--accent);}
 
-    h1, h2, h3, .display {
-      font-family: 'Barlow Condensed', sans-serif;
-      letter-spacing: 0.03em;
-    }
+    .bottom-nav{position:fixed;bottom:0;left:0;right:0;background:var(--bg-secondary);border-top:1px solid var(--border);display:flex;z-index:100;padding-bottom:env(safe-area-inset-bottom);}
+    .nav-item{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:0.65rem 0;gap:0.25rem;cursor:pointer;border:none;background:transparent;color:var(--text-muted);font-family:'Barlow',sans-serif;font-size:0.62rem;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;transition:color 0.2s;position:relative;}
+    .nav-item.active{color:var(--accent);}
+    .nav-item.active::before{content:'';position:absolute;top:0;left:20%;right:20%;height:2px;background:var(--accent);border-radius:0 0 2px 2px;}
+    .nav-icon{font-size:1.3rem;}
 
-    /* ── LOGIN ── */
-    #login-screen {
-      min-height: 100vh;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      background:
-        radial-gradient(ellipse 80% 50% at 50% -10%, rgba(249,115,22,0.12) 0%, transparent 70%),
-        var(--bg-primary);
-      padding: 1.5rem;
-    }
+    .main-content{flex:1;padding:1.25rem 1rem 5.5rem;max-width:900px;width:100%;margin:0 auto;}
+    .module{display:none;}
+    .module.active{display:block;}
 
-    .login-box {
-      width: 100%;
-      max-width: 420px;
-      background: var(--bg-card);
-      border: 1px solid var(--border);
-      border-radius: 1rem;
-      padding: 2.5rem 2rem;
-      position: relative;
-      overflow: hidden;
-    }
+    .page-header{margin-bottom:1.25rem;padding-bottom:1rem;border-bottom:1px solid var(--border);}
+    .page-title{font-family:'Barlow Condensed',sans-serif;font-size:1.8rem;font-weight:800;text-transform:uppercase;letter-spacing:0.04em;}
+    .page-title span{color:var(--accent);}
+    .page-desc{color:var(--text-secondary);font-size:0.85rem;margin-top:0.25rem;}
 
-    .login-box::before {
-      content: '';
-      position: absolute;
-      top: 0; left: 0; right: 0;
-      height: 3px;
-      background: linear-gradient(90deg, transparent, var(--accent), transparent);
-    }
-
-    .login-logo {
-      font-family: 'Barlow Condensed', sans-serif;
-      font-size: 2.2rem;
-      font-weight: 800;
-      letter-spacing: 0.05em;
-      color: var(--text-primary);
-      margin-bottom: 0.25rem;
-    }
-
-    .login-logo span { color: var(--accent); }
-
-    .login-subtitle {
-      color: var(--text-secondary);
-      font-size: 0.85rem;
-      margin-bottom: 2rem;
-    }
-
-    .form-group { margin-bottom: 1.25rem; }
-
-    .form-label {
-      display: block;
-      font-size: 0.75rem;
-      font-weight: 600;
-      letter-spacing: 0.1em;
-      text-transform: uppercase;
-      color: var(--text-secondary);
-      margin-bottom: 0.5rem;
-    }
-
-    .form-input {
-      width: 100%;
-      background: var(--bg-input);
-      border: 1px solid var(--border);
-      border-radius: 0.5rem;
-      padding: 0.75rem 1rem;
-      color: var(--text-primary);
-      font-family: 'Barlow', sans-serif;
-      font-size: 0.95rem;
-      transition: border-color 0.2s, box-shadow 0.2s;
-      outline: none;
-    }
-
-    .form-input:focus {
-      border-color: var(--accent);
-      box-shadow: 0 0 0 3px var(--accent-dim);
-    }
-
-    .btn-primary {
-      width: 100%;
-      padding: 0.85rem;
-      background: var(--accent);
-      color: #fff;
-      font-family: 'Barlow Condensed', sans-serif;
-      font-size: 1.1rem;
-      font-weight: 700;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-      border: none;
-      border-radius: 0.5rem;
-      cursor: pointer;
-      transition: background 0.2s, transform 0.1s, box-shadow 0.2s;
-      margin-top: 0.5rem;
-    }
-
-    .btn-primary:hover {
-      background: #ea6c10;
-      box-shadow: 0 0 20px var(--accent-glow);
-    }
-
-    .btn-primary:active { transform: scale(0.98); }
-
-    .btn-primary:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
-      transform: none;
-    }
-
-    #login-error {
-      margin-top: 1rem;
-      padding: 0.75rem 1rem;
-      background: rgba(239,68,68,0.1);
-      border: 1px solid rgba(239,68,68,0.3);
-      border-radius: 0.5rem;
-      color: #fca5a5;
-      font-size: 0.85rem;
-      display: none;
-    }
-
-    /* ── APP SHELL ── */
-    #app-shell { display: none; min-height: 100vh; flex-direction: column; }
-
-    /* TOP BAR */
-    .topbar {
-      background: var(--bg-secondary);
-      border-bottom: 1px solid var(--border);
-      padding: 0 1rem;
-      height: 56px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      position: sticky;
-      top: 0;
-      z-index: 100;
-    }
-
-    .topbar-logo {
-      font-family: 'Barlow Condensed', sans-serif;
-      font-size: 1.5rem;
-      font-weight: 800;
-      letter-spacing: 0.05em;
-    }
-
-    .topbar-logo span { color: var(--accent); }
-
-    .topbar-user {
-      display: flex;
-      align-items: center;
-      gap: 0.75rem;
-    }
-
-    .topbar-email {
-      font-size: 0.78rem;
-      color: var(--text-secondary);
-      display: none;
-    }
-
-    @media (min-width: 640px) { .topbar-email { display: block; } }
-
-    .btn-logout {
-      background: transparent;
-      border: 1px solid var(--border);
-      border-radius: 0.4rem;
-      padding: 0.35rem 0.75rem;
-      color: var(--text-secondary);
-      font-size: 0.78rem;
-      cursor: pointer;
-      transition: all 0.2s;
-      font-family: 'Barlow', sans-serif;
-    }
-
-    .btn-logout:hover {
-      border-color: var(--accent);
-      color: var(--accent);
-    }
-
-    /* BOTTOM NAV */
-    .bottom-nav {
-      position: fixed;
-      bottom: 0; left: 0; right: 0;
-      background: var(--bg-secondary);
-      border-top: 1px solid var(--border);
-      display: flex;
-      z-index: 100;
-      padding-bottom: env(safe-area-inset-bottom);
-    }
-
-    .nav-item {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      padding: 0.65rem 0;
-      gap: 0.25rem;
-      cursor: pointer;
-      border: none;
-      background: transparent;
-      color: var(--text-muted);
-      font-family: 'Barlow', sans-serif;
-      font-size: 0.65rem;
-      font-weight: 600;
-      letter-spacing: 0.06em;
-      text-transform: uppercase;
-      transition: color 0.2s;
-      position: relative;
-    }
-
-    .nav-item.active { color: var(--accent); }
-
-    .nav-item.active::before {
-      content: '';
-      position: absolute;
-      top: 0; left: 20%; right: 20%;
-      height: 2px;
-      background: var(--accent);
-      border-radius: 0 0 2px 2px;
-    }
-
-    .nav-icon { font-size: 1.3rem; }
-
-    /* MAIN CONTENT */
-    .main-content {
-      flex: 1;
-      padding: 1.25rem 1rem 5.5rem;
-      max-width: 900px;
-      width: 100%;
-      margin: 0 auto;
-    }
-
-    /* MODULES */
-    .module { display: none; }
-    .module.active { display: block; }
-
-    /* PAGE HEADER */
-    .page-header {
-      margin-bottom: 1.5rem;
-      padding-bottom: 1rem;
-      border-bottom: 1px solid var(--border);
-    }
-
-    .page-title {
-      font-size: 1.8rem;
-      font-weight: 800;
-      text-transform: uppercase;
-      letter-spacing: 0.04em;
-    }
-
-    .page-title span { color: var(--accent); }
-
-    .page-desc {
-      color: var(--text-secondary);
-      font-size: 0.85rem;
-      margin-top: 0.25rem;
-    }
+    /* TABS */
+    .tabs{display:flex;gap:0.25rem;margin-bottom:1.25rem;background:var(--bg-card);border:1px solid var(--border);border-radius:0.6rem;padding:0.25rem;overflow-x:auto;}
+    .tab-btn{flex:1;min-width:fit-content;padding:0.55rem 0.75rem;background:transparent;border:none;border-radius:0.4rem;color:var(--text-muted);font-family:'Barlow Condensed',sans-serif;font-size:0.82rem;font-weight:700;letter-spacing:0.05em;text-transform:uppercase;cursor:pointer;transition:all 0.2s;white-space:nowrap;}
+    .tab-btn.active{background:var(--accent);color:#fff;}
+    .tab-panel{display:none;}
+    .tab-panel.active{display:block;}
 
     /* CARDS */
-    .card {
-      background: var(--bg-card);
-      border: 1px solid var(--border);
-      border-radius: 0.75rem;
-      padding: 1.25rem;
-      margin-bottom: 1rem;
-    }
+    .card{background:var(--bg-card);border:1px solid var(--border);border-radius:0.75rem;padding:1.25rem;margin-bottom:1rem;}
+    .card-title{font-family:'Barlow Condensed',sans-serif;font-size:1.1rem;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:var(--accent);margin-bottom:1rem;}
 
-    .card-title {
-      font-family: 'Barlow Condensed', sans-serif;
-      font-size: 1.1rem;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.06em;
-      color: var(--accent);
-      margin-bottom: 1rem;
-    }
+    /* FIELDS */
+    .field-group{display:grid;gap:0.75rem;margin-bottom:1rem;}
+    @media(min-width:480px){.field-group.cols-2{grid-template-columns:1fr 1fr;}.field-group.cols-3{grid-template-columns:1fr 1fr 1fr;}}
+    .field label{display:block;font-size:0.72rem;font-weight:600;letter-spacing:0.09em;text-transform:uppercase;color:var(--text-secondary);margin-bottom:0.4rem;}
+    .field input,.field select,.field textarea{width:100%;background:var(--bg-input);border:1px solid var(--border);border-radius:0.4rem;padding:0.65rem 0.85rem;color:var(--text-primary);font-family:'Barlow',sans-serif;font-size:0.9rem;outline:none;transition:border-color 0.2s;}
+    .field input:focus,.field select:focus,.field textarea:focus{border-color:var(--accent);}
+    .field select option{background:var(--bg-card);}
+    .field textarea{resize:vertical;min-height:80px;}
 
-    /* FORM ELEMENTS INSIDE APP */
-    .field-group {
-      display: grid;
-      gap: 0.75rem;
-      margin-bottom: 1rem;
-    }
-
-    @media (min-width: 480px) {
-      .field-group.cols-2 { grid-template-columns: 1fr 1fr; }
-      .field-group.cols-3 { grid-template-columns: 1fr 1fr 1fr; }
-    }
-
-    .field label {
-      display: block;
-      font-size: 0.72rem;
-      font-weight: 600;
-      letter-spacing: 0.09em;
-      text-transform: uppercase;
-      color: var(--text-secondary);
-      margin-bottom: 0.4rem;
-    }
-
-    .field input, .field select, .field textarea {
-      width: 100%;
-      background: var(--bg-input);
-      border: 1px solid var(--border);
-      border-radius: 0.4rem;
-      padding: 0.65rem 0.85rem;
-      color: var(--text-primary);
-      font-family: 'Barlow', sans-serif;
-      font-size: 0.9rem;
-      outline: none;
-      transition: border-color 0.2s;
-    }
-
-    .field input:focus, .field select:focus, .field textarea:focus {
-      border-color: var(--accent);
-    }
-
-    .field select option { background: var(--bg-card); }
-
-    .btn-action {
-      padding: 0.7rem 1.5rem;
-      background: var(--accent);
-      color: #fff;
-      font-family: 'Barlow Condensed', sans-serif;
-      font-size: 1rem;
-      font-weight: 700;
-      letter-spacing: 0.06em;
-      text-transform: uppercase;
-      border: none;
-      border-radius: 0.4rem;
-      cursor: pointer;
-      transition: all 0.2s;
-    }
-
-    .btn-action:hover {
-      background: #ea6c10;
-      box-shadow: 0 0 16px var(--accent-glow);
-    }
-
-    .btn-action:disabled { opacity: 0.45; cursor: not-allowed; }
-
-    .btn-secondary {
-      padding: 0.7rem 1.25rem;
-      background: transparent;
-      color: var(--text-secondary);
-      font-family: 'Barlow Condensed', sans-serif;
-      font-size: 0.95rem;
-      font-weight: 700;
-      letter-spacing: 0.06em;
-      text-transform: uppercase;
-      border: 1px solid var(--border);
-      border-radius: 0.4rem;
-      cursor: pointer;
-      transition: all 0.2s;
-    }
-
-    .btn-secondary:hover { border-color: var(--accent); color: var(--accent); }
+    .btn-action{padding:0.7rem 1.5rem;background:var(--accent);color:#fff;font-family:'Barlow Condensed',sans-serif;font-size:1rem;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;border:none;border-radius:0.4rem;cursor:pointer;transition:all 0.2s;}
+    .btn-action:hover{background:#ea6c10;box-shadow:0 0 16px var(--accent-glow);}
+    .btn-action:disabled{opacity:0.45;cursor:not-allowed;}
+    .btn-secondary{padding:0.7rem 1.25rem;background:transparent;color:var(--text-secondary);font-family:'Barlow Condensed',sans-serif;font-size:0.95rem;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;border:1px solid var(--border);border-radius:0.4rem;cursor:pointer;transition:all 0.2s;}
+    .btn-secondary:hover{border-color:var(--accent);color:var(--accent);}
 
     /* TABLE */
-    .data-table {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 0.85rem;
-    }
+    .data-table{width:100%;border-collapse:collapse;font-size:0.85rem;}
+    .data-table th{text-align:left;font-size:0.7rem;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-muted);padding:0.6rem 0.75rem;border-bottom:1px solid var(--border);}
+    .data-table td{padding:0.75rem;border-bottom:1px solid #1c1c1c;color:var(--text-secondary);vertical-align:middle;}
+    .data-table td:first-child{color:var(--text-primary);font-weight:500;}
+    .data-table tr:last-child td{border-bottom:none;}
+    .data-table tr:hover td{background:rgba(255,255,255,0.02);}
+    .table-wrap{overflow-x:auto;}
 
-    .data-table th {
-      text-align: left;
-      font-size: 0.7rem;
-      font-weight: 600;
-      letter-spacing: 0.1em;
-      text-transform: uppercase;
-      color: var(--text-muted);
-      padding: 0.6rem 0.75rem;
-      border-bottom: 1px solid var(--border);
-    }
+    /* BADGES */
+    .badge{display:inline-block;padding:0.2rem 0.6rem;border-radius:99px;font-size:0.7rem;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;}
+    .badge-orange{background:var(--accent-dim);color:var(--accent);}
+    .badge-green{background:rgba(34,197,94,0.12);color:#86efac;}
+    .badge-blue{background:rgba(59,130,246,0.12);color:#93c5fd;}
+    .badge-gray{background:rgba(255,255,255,0.06);color:var(--text-secondary);}
+    .badge-red{background:rgba(239,68,68,0.12);color:#fca5a5;}
 
-    .data-table td {
-      padding: 0.75rem 0.75rem;
-      border-bottom: 1px solid #1c1c1c;
-      color: var(--text-secondary);
-      vertical-align: middle;
-    }
-
-    .data-table td:first-child { color: var(--text-primary); font-weight: 500; }
-
-    .data-table tr:last-child td { border-bottom: none; }
-
-    .data-table tr:hover td { background: rgba(255,255,255,0.02); }
-
-    .table-wrap { overflow-x: auto; }
-
-    /* BADGE */
-    .badge {
-      display: inline-block;
-      padding: 0.2rem 0.6rem;
-      border-radius: 99px;
-      font-size: 0.7rem;
-      font-weight: 600;
-      letter-spacing: 0.06em;
-      text-transform: uppercase;
-    }
-
-    .badge-orange { background: var(--accent-dim); color: var(--accent); }
-    .badge-green { background: rgba(34,197,94,0.12); color: #86efac; }
-    .badge-gray { background: rgba(255,255,255,0.06); color: var(--text-secondary); }
-
-    /* STAT CARD */
-    .stat-card {
-      background: var(--bg-card);
-      border: 1px solid var(--border);
-      border-radius: 0.75rem;
-      padding: 1rem 1.25rem;
-      position: relative;
-      overflow: hidden;
-    }
-
-    .stat-card::after {
-      content: '';
-      position: absolute;
-      bottom: 0; left: 0; right: 0;
-      height: 2px;
-      background: linear-gradient(90deg, var(--accent), transparent);
-      opacity: 0.5;
-    }
-
-    .stat-label {
-      font-size: 0.7rem;
-      font-weight: 600;
-      letter-spacing: 0.1em;
-      text-transform: uppercase;
-      color: var(--text-muted);
-      margin-bottom: 0.35rem;
-    }
-
-    .stat-value {
-      font-family: 'Barlow Condensed', sans-serif;
-      font-size: 1.7rem;
-      font-weight: 800;
-      color: var(--text-primary);
-    }
-
-    .stat-value small { font-size: 0.9rem; color: var(--text-secondary); font-weight: 400; }
+    /* STATS */
+    .stat-card{background:var(--bg-card);border:1px solid var(--border);border-radius:0.75rem;padding:1rem 1.25rem;position:relative;overflow:hidden;}
+    .stat-card::after{content:'';position:absolute;bottom:0;left:0;right:0;height:2px;background:linear-gradient(90deg,var(--accent),transparent);opacity:0.5;}
+    .stat-label{font-size:0.7rem;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-muted);margin-bottom:0.35rem;}
+    .stat-value{font-family:'Barlow Condensed',sans-serif;font-size:1.7rem;font-weight:800;}
 
     /* TOAST */
-    #toast {
-      position: fixed;
-      bottom: 5.5rem;
-      left: 50%;
-      transform: translateX(-50%) translateY(10px);
-      background: var(--bg-card);
-      border: 1px solid var(--border);
-      border-radius: 0.5rem;
-      padding: 0.75rem 1.25rem;
-      font-size: 0.85rem;
-      color: var(--text-primary);
-      z-index: 999;
-      opacity: 0;
-      transition: all 0.3s;
-      white-space: nowrap;
-      pointer-events: none;
-    }
+    #toast{position:fixed;bottom:5.5rem;left:50%;transform:translateX(-50%) translateY(10px);background:var(--bg-card);border:1px solid var(--border);border-radius:0.5rem;padding:0.75rem 1.25rem;font-size:0.85rem;z-index:999;opacity:0;transition:all 0.3s;white-space:nowrap;pointer-events:none;}
+    #toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+    #toast.success{border-color:var(--success);color:#86efac;}
+    #toast.error{border-color:var(--danger);color:#fca5a5;}
 
-    #toast.show {
-      opacity: 1;
-      transform: translateX(-50%) translateY(0);
-    }
+    .spinner{width:18px;height:18px;border:2px solid rgba(255,255,255,0.2);border-top-color:#fff;border-radius:50%;animation:spin 0.6s linear infinite;display:inline-block;}
+    @keyframes spin{to{transform:rotate(360deg);}}
 
-    #toast.success { border-color: var(--success); color: #86efac; }
-    #toast.error { border-color: var(--danger); color: #fca5a5; }
+    .empty-state{text-align:center;padding:3rem 1rem;color:var(--text-muted);}
+    .empty-state-icon{font-size:2.5rem;margin-bottom:0.75rem;}
+    .empty-state-text{font-size:0.9rem;}
+    .highlight{color:var(--accent);font-weight:600;}
+    .divider{border:none;border-top:1px solid var(--border);margin:1rem 0;}
 
-    /* LOADING SPINNER */
-    .spinner {
-      width: 18px; height: 18px;
-      border: 2px solid rgba(255,255,255,0.2);
-      border-top-color: #fff;
-      border-radius: 50%;
-      animation: spin 0.6s linear infinite;
-      display: inline-block;
-    }
+    /* LINEAS PEDIDO */
+    .linea-pedido{display:grid;grid-template-columns:1fr 100px 100px 34px;gap:0.5rem;align-items:end;margin-bottom:0.5rem;}
+    @media(max-width:479px){.linea-pedido{grid-template-columns:1fr 34px;}.linea-pedido .lp-ml,.linea-pedido .lp-precio{grid-column:1;}}
+    .btn-remove{width:32px;height:32px;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.25);border-radius:0.35rem;color:#fca5a5;font-size:1rem;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all 0.2s;flex-shrink:0;}
+    .btn-remove:hover{background:rgba(239,68,68,0.2);}
+    .btn-add-linea{background:transparent;border:1px dashed var(--border);border-radius:0.4rem;padding:0.55rem 1rem;color:var(--text-muted);font-family:'Barlow',sans-serif;font-size:0.85rem;cursor:pointer;width:100%;transition:all 0.2s;margin-bottom:1rem;}
+    .btn-add-linea:hover{border-color:var(--accent);color:var(--accent);}
 
-    @keyframes spin { to { transform: rotate(360deg); } }
+    /* RESUMEN */
+    .resumen-compra{background:var(--accent-dim);border:1px solid rgba(249,115,22,0.25);border-radius:0.5rem;padding:0.85rem 1rem;margin-bottom:1rem;}
+    .resumen-row{display:flex;justify-content:space-between;margin-bottom:0.25rem;font-size:0.85rem;}
+    .resumen-row:last-child{margin-bottom:0;font-weight:600;}
+    .resumen-row span:first-child{color:var(--text-secondary);}
+    .resumen-row span:last-child{color:var(--accent);}
 
-    /* EMPTY STATE */
-    .empty-state {
-      text-align: center;
-      padding: 3rem 1rem;
-      color: var(--text-muted);
-    }
+    /* HISTORIAL CARDS */
+    .compra-card{background:var(--bg-card);border:1px solid var(--border);border-radius:0.6rem;padding:1rem;margin-bottom:0.75rem;}
+    .compra-card-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:0.75rem;}
+    .compra-proveedor{font-family:'Barlow Condensed',sans-serif;font-size:1.1rem;font-weight:700;}
+    .compra-fecha{font-size:0.78rem;color:var(--text-muted);margin-top:0.15rem;}
+    .compra-total{font-family:'Barlow Condensed',sans-serif;font-size:1.4rem;font-weight:800;color:var(--accent);}
+    .compra-lineas{border-top:1px solid var(--border);padding-top:0.65rem;}
+    .compra-linea-item{display:flex;justify-content:space-between;font-size:0.82rem;padding:0.2rem 0;color:var(--text-secondary);}
+    .compra-linea-item span:last-child{color:var(--text-primary);}
 
-    .empty-state-icon { font-size: 2.5rem; margin-bottom: 0.75rem; }
-    .empty-state-text { font-size: 0.9rem; }
+    /* INTERVENCIONES */
+    .intervencion-card{background:var(--bg-card);border:1px solid var(--border);border-radius:0.6rem;padding:1rem;margin-bottom:0.75rem;cursor:pointer;transition:border-color 0.2s;}
+    .intervencion-card:hover{border-color:var(--accent);}
+    .intervencion-matricula{font-family:'Barlow Condensed',sans-serif;font-size:1.4rem;font-weight:800;letter-spacing:0.06em;}
+    .intervencion-cliente{font-size:0.82rem;color:var(--text-secondary);margin-top:0.1rem;}
+    .intervencion-meta{display:flex;gap:0.5rem;margin-top:0.65rem;flex-wrap:wrap;}
 
-    /* DIVIDER */
-    .divider {
-      border: none;
-      border-top: 1px solid var(--border);
-      margin: 1rem 0;
-    }
+    /* MODAL */
+    .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:200;display:none;align-items:center;justify-content:center;padding:1rem;}
+    .modal-overlay.open{display:flex;}
+    .modal{background:var(--bg-card);border:1px solid var(--border);border-radius:0.75rem;width:100%;max-width:560px;max-height:90vh;overflow-y:auto;padding:1.5rem;position:relative;}
+    .modal-title{font-family:'Barlow Condensed',sans-serif;font-size:1.4rem;font-weight:800;text-transform:uppercase;letter-spacing:0.04em;margin-bottom:1.25rem;}
+    .modal-title span{color:var(--accent);}
+    .btn-close-modal{position:absolute;top:1rem;right:1rem;background:transparent;border:1px solid var(--border);border-radius:0.35rem;width:30px;height:30px;color:var(--text-secondary);font-size:1rem;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all 0.2s;}
+    .btn-close-modal:hover{border-color:var(--accent);color:var(--accent);}
 
-    /* HIGHLIGHT VALUE */
-    .highlight { color: var(--accent); font-weight: 600; }
-
-    /* PMP PREVIEW BOX */
-    .pmp-preview {
-      background: var(--accent-dim);
-      border: 1px solid rgba(249,115,22,0.25);
-      border-radius: 0.5rem;
-      padding: 0.85rem 1rem;
-      font-size: 0.85rem;
-      display: none;
-    }
-
-    .pmp-preview.visible { display: block; }
-
-    .pmp-row {
-      display: flex;
-      justify-content: space-between;
-      margin-bottom: 0.25rem;
-    }
-
-    .pmp-row:last-child { margin-bottom: 0; }
-    .pmp-row span:first-child { color: var(--text-secondary); }
-    .pmp-row span:last-child { color: var(--accent); font-weight: 600; }
+    /* PRODUCTOS USADOS */
+    .producto-usado-row{display:grid;grid-template-columns:1fr 90px 34px;gap:0.5rem;align-items:end;margin-bottom:0.5rem;}
   </style>
 </head>
 <body>
 
-  <!-- ═══════════════════════════════════════
-       LOGIN SCREEN
-  ═══════════════════════════════════════ -->
-  <div id="login-screen">
-    <div class="login-box">
-      <div class="login-logo">DETAIL<span>PRO</span></div>
-      <div class="login-subtitle">Sistema de Gestión · Calidad & Operaciones</div>
-
-      <div class="form-group">
-        <label class="form-label">Email</label>
-        <input type="email" id="login-email" class="form-input" placeholder="usuario@taller.com" autocomplete="username" />
-      </div>
-
-      <div class="form-group">
-        <label class="form-label">Contraseña</label>
-        <input type="password" id="login-password" class="form-input" placeholder="••••••••" autocomplete="current-password" />
-      </div>
-
-      <button id="btn-login" class="btn-primary" onclick="handleLogin()">
-        Entrar al sistema
-      </button>
-
-      <div id="login-error"></div>
+<!-- LOGIN -->
+<div id="login-screen">
+  <div class="login-box">
+    <div class="login-logo">DETAIL<span>PRO</span></div>
+    <div class="login-subtitle">Sistema de Gestión · Calidad & Operaciones</div>
+    <div class="form-group">
+      <label class="form-label">Email</label>
+      <input type="email" id="login-email" class="form-input" placeholder="usuario@taller.com" autocomplete="username" />
     </div>
+    <div class="form-group">
+      <label class="form-label">Contraseña</label>
+      <input type="password" id="login-password" class="form-input" placeholder="••••••••" autocomplete="current-password" />
+    </div>
+    <button id="btn-login" class="btn-primary" onclick="handleLogin()">Entrar al sistema</button>
+    <div id="login-error"></div>
   </div>
+</div>
 
-  <!-- ═══════════════════════════════════════
-       APP SHELL
-  ═══════════════════════════════════════ -->
-  <div id="app-shell">
+<!-- APP SHELL -->
+<div id="app-shell">
+  <nav class="topbar">
+    <div class="topbar-logo">DETAIL<span>PRO</span></div>
+    <div class="topbar-user">
+      <span class="topbar-email" id="user-email-display"></span>
+      <button class="btn-logout" onclick="handleLogout()">Salir</button>
+    </div>
+  </nav>
 
-    <!-- TOP BAR -->
-    <nav class="topbar">
-      <div class="topbar-logo">DETAIL<span>PRO</span></div>
-      <div class="topbar-user">
-        <span class="topbar-email" id="user-email-display"></span>
-        <button class="btn-logout" onclick="handleLogout()">Salir</button>
+  <main class="main-content">
+
+    <!-- ══ ALMACÉN ══ -->
+    <section id="mod-almacen" class="module active">
+      <div class="page-header">
+        <div class="page-title">ALMACÉN <span>&</span> INVENTARIO</div>
+        <div class="page-desc">Gestión de productos, compras y precio medio ponderado</div>
       </div>
-    </nav>
+      <div class="tabs">
+        <button class="tab-btn active" onclick="switchTab('almacen','inventario')">📦 Inventario</button>
+        <button class="tab-btn" onclick="switchTab('almacen','nuevo-producto')">➕ Producto</button>
+        <button class="tab-btn" onclick="switchTab('almacen','nuevo-pedido')">🛒 Pedido</button>
+        <button class="tab-btn" onclick="switchTab('almacen','historial');cargarHistorial()">📋 Historial</button>
+      </div>
 
-    <!-- MAIN CONTENT -->
-    <main class="main-content">
-
-      <!-- ── MÓDULO: ALMACÉN ── -->
-      <section id="mod-almacen" class="module active">
-        <div class="page-header">
-          <div class="page-title">ALMACÉN <span>&</span> INVENTARIO</div>
-          <div class="page-desc">Gestión de productos y cálculo de precio medio ponderado</div>
+      <!-- Inventario -->
+      <div class="tab-panel active" id="tab-almacen-inventario">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem;margin-bottom:1rem;">
+          <div class="stat-card"><div class="stat-label">Productos</div><div class="stat-value" id="stat-total-productos">—</div></div>
+          <div class="stat-card"><div class="stat-label">Categorías</div><div class="stat-value" id="stat-total-categorias">—</div></div>
         </div>
-
-        <!-- Stats row -->
-        <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-bottom: 1rem;" id="almacen-stats">
-          <div class="stat-card">
-            <div class="stat-label">Productos</div>
-            <div class="stat-value" id="stat-total-productos">—</div>
+        <div class="card">
+          <div id="productos-loading" style="text-align:center;padding:2rem;color:var(--text-muted);"><div class="spinner"></div></div>
+          <div class="table-wrap" id="productos-table-wrap" style="display:none;">
+            <table class="data-table">
+              <thead><tr><th>Producto</th><th>Cat.</th><th>Stock</th><th>PMP €/L</th><th>€/Dosis</th></tr></thead>
+              <tbody id="productos-tbody"></tbody>
+            </table>
           </div>
-          <div class="stat-card">
-            <div class="stat-label">Categorías</div>
-            <div class="stat-value" id="stat-total-categorias">—</div>
+          <div id="productos-empty" class="empty-state" style="display:none;">
+            <div class="empty-state-icon">🧴</div><div class="empty-state-text">Sin productos aún</div>
           </div>
         </div>
+      </div>
 
-        <!-- AÑADIR PRODUCTO -->
+      <!-- Nuevo Producto -->
+      <div class="tab-panel" id="tab-almacen-nuevo-producto">
         <div class="card">
           <div class="card-title">➕ Nuevo Producto</div>
-
           <div class="field-group cols-2">
-            <div class="field">
-              <label>Nombre Interno</label>
-              <input type="text" id="prod-nombre-interno" placeholder="Ej: desengrasante_v1" />
-            </div>
-            <div class="field">
-              <label>Nombre Comercial</label>
-              <input type="text" id="prod-nombre-comercial" placeholder="Ej: Koch Chemie GSF" />
-            </div>
+            <div class="field"><label>Nombre Interno</label><input type="text" id="prod-nombre-interno" placeholder="desengrasante_v1" /></div>
+            <div class="field"><label>Nombre Comercial</label><input type="text" id="prod-nombre-comercial" placeholder="Koch Chemie GSF" /></div>
           </div>
-
           <div class="field-group cols-3">
             <div class="field">
               <label>Categoría</label>
@@ -654,158 +257,266 @@
                 <option value="otro">Otro</option>
               </select>
             </div>
-            <div class="field">
-              <label>Formato (ml)</label>
-              <input type="number" id="prod-formato" placeholder="1000" min="1" />
-            </div>
-            <div class="field">
-              <label>Dosis Estándar (ml)</label>
-              <input type="number" id="prod-dosis" placeholder="10" min="0.1" step="0.1" />
-            </div>
+            <div class="field"><label>Formato (ml)</label><input type="number" id="prod-formato" placeholder="1000" min="1" /></div>
+            <div class="field"><label>Dosis Estándar (ml)</label><input type="number" id="prod-dosis" placeholder="10" min="0.1" step="0.1" /></div>
           </div>
-
           <div class="field-group cols-2">
-            <div class="field">
-              <label>Precio Inicial (€)</label>
-              <input type="number" id="prod-precio-inicial" placeholder="Precio primera compra" min="0" step="0.01" />
-            </div>
-            <div class="field">
-              <label>Stock Inicial (ml)</label>
-              <input type="number" id="prod-stock-inicial" placeholder="ml en stock" min="0" />
-            </div>
+            <div class="field"><label>Precio Inicial (€)</label><input type="number" id="prod-precio-inicial" placeholder="0.00" min="0" step="0.01" /></div>
+            <div class="field"><label>Stock Inicial (ml)</label><input type="number" id="prod-stock-inicial" placeholder="ml" min="0" /></div>
           </div>
-
           <button class="btn-action" onclick="crearProducto()">Guardar Producto</button>
         </div>
+      </div>
 
-        <!-- REGISTRAR PEDIDO -->
+      <!-- Nuevo Pedido -->
+      <div class="tab-panel" id="tab-almacen-nuevo-pedido">
         <div class="card">
-          <div class="card-title">📦 Registrar Pedido / Reposición</div>
-          <div class="page-desc" style="margin-bottom:1rem;">Al registrar un pedido, el sistema recalcula automáticamente el PMP y el coste por dosis.</div>
+          <div class="card-title">🛒 Registrar Compra</div>
+          <p style="color:var(--text-secondary);font-size:0.85rem;margin-bottom:1rem;">Registra una compra completa: dónde compraste, cuánto gastaste y qué productos incluía.</p>
+          <div class="field-group cols-2">
+            <div class="field"><label>Proveedor / Tienda</label><input type="text" id="compra-proveedor" placeholder="Koch Chemie Shop" /></div>
+            <div class="field"><label>Fecha de Compra</label><input type="date" id="compra-fecha" /></div>
+          </div>
+          <div class="field-group cols-2">
+            <div class="field"><label>URL / Web</label><input type="url" id="compra-url" placeholder="https://..." /></div>
+            <div class="field"><label>Gasto Total (€)</label><input type="number" id="compra-total" placeholder="0.00" min="0" step="0.01" oninput="actualizarResumenCompra()" /></div>
+          </div>
+          <div class="field"><label>Notas</label><textarea id="compra-notas" placeholder="Descuentos, incidencias..."></textarea></div>
 
+          <hr class="divider" />
+          <div style="font-family:'Barlow Condensed',sans-serif;font-size:1rem;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:var(--text-secondary);margin-bottom:0.75rem;">Productos incluidos en esta compra</div>
+          <div style="display:grid;grid-template-columns:1fr 100px 100px 34px;gap:0.5rem;margin-bottom:0.4rem;">
+            <div style="font-size:0.7rem;font-weight:600;letter-spacing:0.09em;text-transform:uppercase;color:var(--text-muted);">Producto</div>
+            <div style="font-size:0.7rem;font-weight:600;letter-spacing:0.09em;text-transform:uppercase;color:var(--text-muted);">Cant. (ml)</div>
+            <div style="font-size:0.7rem;font-weight:600;letter-spacing:0.09em;text-transform:uppercase;color:var(--text-muted);">Precio (€)</div>
+            <div></div>
+          </div>
+          <div id="lineas-pedido"></div>
+          <button class="btn-add-linea" onclick="addLineaPedido()">+ Añadir producto</button>
+          <div class="resumen-compra" id="resumen-compra" style="display:none;">
+            <div class="resumen-row"><span>Productos añadidos</span><span id="res-num-productos">0</span></div>
+            <div class="resumen-row"><span>Gasto total</span><span id="res-gasto-total">0.00 €</span></div>
+          </div>
+          <button class="btn-action" onclick="registrarCompra()">Registrar Compra y Actualizar PMP</button>
+        </div>
+      </div>
+
+      <!-- Historial -->
+      <div class="tab-panel" id="tab-almacen-historial">
+        <div id="historial-loading" style="text-align:center;padding:2rem;color:var(--text-muted);display:none;"><div class="spinner"></div></div>
+        <div id="historial-container"></div>
+        <div id="historial-empty" class="empty-state" style="display:none;">
+          <div class="empty-state-icon">📦</div><div class="empty-state-text">No hay compras registradas aún</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══ OPERACIONES ══ -->
+    <section id="mod-operaciones" class="module">
+      <div class="page-header">
+        <div class="page-title">OPERACIONES</div>
+        <div class="page-desc">Fichas de vehículos e intervenciones</div>
+      </div>
+      <div class="tabs">
+        <button class="tab-btn active" onclick="switchTab('operaciones','lista')">🚗 Intervenciones</button>
+        <button class="tab-btn" onclick="switchTab('operaciones','nueva')">➕ Nueva</button>
+      </div>
+
+      <!-- Lista -->
+      <div class="tab-panel active" id="tab-operaciones-lista">
+        <div id="intervenciones-loading" style="text-align:center;padding:2rem;color:var(--text-muted);"><div class="spinner"></div></div>
+        <div id="intervenciones-container"></div>
+        <div id="intervenciones-empty" class="empty-state" style="display:none;">
+          <div class="empty-state-icon">🚗</div><div class="empty-state-text">No hay intervenciones registradas</div>
+        </div>
+      </div>
+
+      <!-- Nueva -->
+      <div class="tab-panel" id="tab-operaciones-nueva">
+        <div class="card">
+          <div class="card-title">🚗 Nueva Intervención</div>
+          <div class="field-group cols-2">
+            <div class="field"><label>Matrícula</label><input type="text" id="int-matricula" placeholder="0000 AAA" style="text-transform:uppercase;" /></div>
+            <div class="field"><label>Nombre Cliente</label><input type="text" id="int-cliente" placeholder="Nombre del cliente" /></div>
+          </div>
           <div class="field-group cols-2">
             <div class="field">
-              <label>Producto</label>
-              <select id="pedido-producto" onchange="onPedidoProductoChange()">
-                <option value="">Seleccionar producto...</option>
+              <label>Servicio</label>
+              <select id="int-servicio">
+                <option value="">Seleccionar...</option>
+                <option value="Lavado Básico">Lavado Básico</option>
+                <option value="Lavado Completo">Lavado Completo</option>
+                <option value="Descontaminación">Descontaminación</option>
+                <option value="Pulido One Step">Pulido One Step</option>
+                <option value="Pulido Completo">Pulido Completo</option>
+                <option value="Sellado / Cera">Sellado / Cera</option>
+                <option value="Revestimiento Cerámico">Revestimiento Cerámico</option>
+                <option value="Interior Completo">Interior Completo</option>
+                <option value="Detailing Completo">Detailing Completo</option>
               </select>
             </div>
-            <div class="field">
-              <label>Fecha</label>
-              <input type="date" id="pedido-fecha" />
-            </div>
+            <div class="field"><label>Horas Reales</label><input type="number" id="int-horas" placeholder="2.5" min="0" step="0.5" /></div>
           </div>
-
           <div class="field-group cols-2">
+            <div class="field"><label>Precio Cobrado (€)</label><input type="number" id="int-precio" placeholder="0.00" min="0" step="0.01" /></div>
             <div class="field">
-              <label>Cantidad Comprada (ml)</label>
-              <input type="number" id="pedido-cantidad" placeholder="1000" min="1" oninput="calcularPMPPreview()" />
-            </div>
-            <div class="field">
-              <label>Precio Total Pagado (€)</label>
-              <input type="number" id="pedido-precio" placeholder="0.00" min="0" step="0.01" oninput="calcularPMPPreview()" />
-            </div>
-          </div>
-
-          <!-- PMP PREVIEW -->
-          <div class="pmp-preview" id="pmp-preview">
-            <div class="pmp-row">
-              <span>Nuevo PMP (€/L)</span>
-              <span id="pmp-preview-litro">—</span>
-            </div>
-            <div class="pmp-row">
-              <span>Coste por dosis</span>
-              <span id="pmp-preview-dosis">—</span>
-            </div>
-            <div class="pmp-row">
-              <span>Nuevo stock total</span>
-              <span id="pmp-preview-stock">—</span>
+              <label>Estado</label>
+              <select id="int-estado">
+                <option value="abierta">Abierta</option>
+                <option value="en_proceso">En Proceso</option>
+                <option value="finalizada">Finalizada</option>
+                <option value="entregada">Entregada</option>
+              </select>
             </div>
           </div>
+          <hr class="divider" />
+          <div style="font-family:'Barlow Condensed',sans-serif;font-size:1rem;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:var(--text-secondary);margin-bottom:0.75rem;">Productos Utilizados</div>
+          <div style="display:grid;grid-template-columns:1fr 90px 34px;gap:0.5rem;margin-bottom:0.4rem;">
+            <div style="font-size:0.7rem;font-weight:600;letter-spacing:0.09em;text-transform:uppercase;color:var(--text-muted);">Producto</div>
+            <div style="font-size:0.7rem;font-weight:600;letter-spacing:0.09em;text-transform:uppercase;color:var(--text-muted);">ml usados</div>
+            <div></div>
+          </div>
+          <div id="productos-usados-container"></div>
+          <button class="btn-add-linea" onclick="addProductoUsado()">+ Añadir producto usado</button>
+          <hr class="divider" />
+          <div class="field">
+            <label>Incidentes / Observaciones Técnicas</label>
+            <textarea id="int-incidentes" placeholder="Daños previos, anomalías, observaciones técnicas..."></textarea>
+          </div>
+          <button class="btn-action" onclick="crearIntervencion()">Guardar Intervención</button>
+        </div>
+      </div>
+    </section>
 
-          <div style="margin-top:1rem;">
-            <button class="btn-action" onclick="registrarPedido()">Registrar Pedido</button>
+    <!-- ══ CALIDAD ══ -->
+    <section id="mod-calidad" class="module">
+      <div class="page-header">
+        <div class="page-title">CALIDAD <span>&</span> INFORMES</div>
+        <div class="page-desc">Genera informes PDF para el cliente y análisis de rentabilidad interna</div>
+      </div>
+
+      <!-- Selector -->
+      <div class="card">
+        <div class="card-title">📋 Seleccionar Intervención</div>
+        <div class="field-group cols-2">
+          <div class="field" style="grid-column:1/-1;">
+            <label>Intervención</label>
+            <select id="calidad-intervencion-sel" onchange="cargarVistaPrevia()">
+              <option value="">Selecciona una intervención...</option>
+            </select>
           </div>
         </div>
+        <div class="field-group cols-2">
+          <div class="field">
+            <label>Coste Hora Mano de Obra (€/h)</label>
+            <input type="number" id="calidad-coste-hora" value="25" min="0" step="0.5" oninput="cargarVistaPrevia()" />
+          </div>
+        </div>
+      </div>
 
-        <!-- LISTADO DE PRODUCTOS -->
+      <!-- Empty -->
+      <div id="calidad-empty" class="empty-state">
+        <div class="empty-state-icon">📄</div>
+        <div class="empty-state-text">Selecciona una intervención para generar los informes</div>
+      </div>
+
+      <!-- Vista previa -->
+      <div id="calidad-preview" style="display:none;">
+
+        <!-- INFO CLIENTE -->
         <div class="card">
-          <div class="card-title">📋 Inventario Actual</div>
-          <div id="productos-loading" style="text-align:center; padding:2rem; color:var(--text-muted);">
-            <div class="spinner"></div>
-          </div>
-          <div class="table-wrap" id="productos-table-wrap" style="display:none;">
-            <table class="data-table">
-              <thead>
-                <tr>
-                  <th>Producto</th>
-                  <th>Categoría</th>
-                  <th>Stock (ml)</th>
-                  <th>PMP (€/L)</th>
-                  <th>€/Dosis</th>
-                </tr>
-              </thead>
-              <tbody id="productos-tbody"></tbody>
-            </table>
-          </div>
-          <div id="productos-empty" class="empty-state" style="display:none;">
-            <div class="empty-state-icon">🧴</div>
-            <div class="empty-state-text">No hay productos registrados aún</div>
+          <div class="card-title">👤 Datos del Vehículo</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.5rem;">
+            <div>
+              <div style="font-size:0.7rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.08em;">Matrícula</div>
+              <div style="font-family:'Barlow Condensed',sans-serif;font-size:1.4rem;font-weight:800;" id="prev-matricula">—</div>
+            </div>
+            <div>
+              <div style="font-size:0.7rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.08em;">Estado</div>
+              <div style="margin-top:0.25rem;" id="prev-estado">—</div>
+            </div>
+            <div>
+              <div style="font-size:0.7rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.08em;">Cliente</div>
+              <div style="font-size:0.95rem;font-weight:600;" id="prev-cliente">—</div>
+            </div>
+            <div>
+              <div style="font-size:0.7rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.08em;">Servicio</div>
+              <div style="font-size:0.95rem;color:var(--accent);" id="prev-servicio">—</div>
+            </div>
+            <div>
+              <div style="font-size:0.7rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.08em;">Fecha</div>
+              <div style="font-size:0.9rem;" id="prev-fecha">—</div>
+            </div>
           </div>
         </div>
-      </section>
 
-      <!-- ── MÓDULO: OPERACIONES (placeholder) ── -->
-      <section id="mod-operaciones" class="module">
-        <div class="page-header">
-          <div class="page-title">OPERACIONES</div>
-          <div class="page-desc">Fichas de vehículos, intervenciones y registro de incidentes</div>
-        </div>
+        <!-- PRODUCTOS -->
         <div class="card">
-          <div class="empty-state">
-            <div class="empty-state-icon">🚗</div>
-            <div class="empty-state-text">Módulo en construcción — Paso 3</div>
-          </div>
+          <div class="card-title">🧴 Productos Aplicados</div>
+          <div id="prev-productos"></div>
         </div>
-      </section>
 
-      <!-- ── MÓDULO: CALIDAD (placeholder) ── -->
-      <section id="mod-calidad" class="module">
-        <div class="page-header">
-          <div class="page-title">CALIDAD <span>&</span> INFORMES</div>
-          <div class="page-desc">Generación de PDFs para cliente e informes de rentabilidad</div>
-        </div>
+        <!-- RENTABILIDAD -->
         <div class="card">
-          <div class="empty-state">
-            <div class="empty-state-icon">📄</div>
-            <div class="empty-state-text">Módulo en construcción — Paso 4</div>
+          <div class="card-title">💰 Análisis de Rentabilidad</div>
+          <div style="display:grid;gap:0.6rem;">
+            <div style="display:flex;justify-content:space-between;padding:0.6rem 0.75rem;background:var(--bg-input);border-radius:0.4rem;">
+              <span style="font-size:0.85rem;color:var(--text-secondary);">Precio Cobrado</span>
+              <span style="font-weight:600;color:var(--success);" id="prev-precio">—</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;padding:0.6rem 0.75rem;background:var(--bg-input);border-radius:0.4rem;">
+              <span style="font-size:0.85rem;color:var(--text-secondary);">− Coste Materiales</span>
+              <span style="font-weight:600;color:#fca5a5;" id="prev-coste-mat">—</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;padding:0.6rem 0.75rem;background:var(--bg-input);border-radius:0.4rem;">
+              <span style="font-size:0.85rem;color:var(--text-secondary);">− Coste Mano de Obra</span>
+              <span style="font-weight:600;color:#fca5a5;" id="prev-coste-horas">—</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;padding:0.75rem;background:var(--accent-dim);border:1px solid rgba(249,115,22,0.3);border-radius:0.4rem;">
+              <span style="font-size:0.95rem;font-weight:700;font-family:'Barlow Condensed',sans-serif;letter-spacing:0.05em;text-transform:uppercase;">= Beneficio Bruto</span>
+              <span style="font-family:'Barlow Condensed',sans-serif;font-size:1.2rem;font-weight:800;" id="prev-beneficio">—</span>
+            </div>
           </div>
         </div>
-      </section>
 
-    </main>
+        <!-- OBSERVACIONES -->
+        <div class="card">
+          <div class="card-title">📝 Observaciones Técnicas</div>
+          <div style="font-size:0.85rem;color:var(--text-secondary);background:var(--bg-input);border-radius:0.4rem;padding:0.75rem;" id="prev-incidentes">—</div>
+        </div>
 
-    <!-- BOTTOM NAV -->
-    <nav class="bottom-nav">
-      <button class="nav-item active" id="nav-almacen" onclick="switchModule('almacen')">
-        <span class="nav-icon">🧴</span>
-        <span>Almacén</span>
-      </button>
-      <button class="nav-item" id="nav-operaciones" onclick="switchModule('operaciones')">
-        <span class="nav-icon">🚗</span>
-        <span>Operaciones</span>
-      </button>
-      <button class="nav-item" id="nav-calidad" onclick="switchModule('calidad')">
-        <span class="nav-icon">📄</span>
-        <span>Calidad</span>
-      </button>
-    </nav>
+        <!-- BOTONES PDF -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem;margin-bottom:1rem;">
+          <button class="btn-action" onclick="generarPDFCliente()" style="display:flex;align-items:center;justify-content:center;gap:0.4rem;">
+            📄 PDF Cliente
+          </button>
+          <button class="btn-secondary" onclick="generarPDFInterno()" style="display:flex;align-items:center;justify-content:center;gap:0.4rem;border-color:var(--accent);color:var(--accent);">
+            🔒 PDF Interno
+          </button>
+        </div>
 
+      </div>
+    </section>
+
+  </main>
+
+  <nav class="bottom-nav">
+    <button class="nav-item active" id="nav-almacen" onclick="switchModule('almacen')"><span class="nav-icon">🧴</span><span>Almacén</span></button>
+    <button class="nav-item" id="nav-operaciones" onclick="switchModule('operaciones')"><span class="nav-icon">🚗</span><span>Operaciones</span></button>
+    <button class="nav-item" id="nav-calidad" onclick="switchModule('calidad')"><span class="nav-icon">📄</span><span>Calidad</span></button>
+  </nav>
+</div>
+
+<!-- MODAL DETALLE INTERVENCIÓN -->
+<div class="modal-overlay" id="modal-intervencion">
+  <div class="modal">
+    <button class="btn-close-modal" onclick="cerrarModal('modal-intervencion')">✕</button>
+    <div class="modal-title" id="modal-int-titulo">INTERVENCIÓN</div>
+    <div id="modal-int-contenido"></div>
   </div>
+</div>
 
-  <!-- TOAST -->
-  <div id="toast"></div>
-
-  <script src="app.js"></script>
+<div id="toast"></div>
+<script src="app.js"></script>
 </body>
 </html>
