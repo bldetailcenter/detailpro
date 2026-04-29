@@ -202,8 +202,66 @@
 
   <main class="main-content">
 
-    <!-- ══ ALMACÉN ══ -->
-    <section id="mod-almacen" class="module active">
+    <!-- ══ DASHBOARD ══ -->
+    <section id="mod-dashboard" class="module active">
+      <div class="page-header">
+        <div class="page-title">DASHBOARD</div>
+        <div class="page-desc" id="dash-fecha"></div>
+      </div>
+
+      <!-- Stats mes -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem;margin-bottom:1rem;">
+        <div class="stat-card">
+          <div class="stat-label">Ingresos este mes</div>
+          <div class="stat-value highlight" id="dash-ingresos">—</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Servicios este mes</div>
+          <div class="stat-value" id="dash-servicios">—</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">En curso / Pendientes</div>
+          <div class="stat-value" id="dash-pendientes">—</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Stock crítico</div>
+          <div class="stat-value" id="dash-stock-critico" style="color:var(--danger);">—</div>
+        </div>
+      </div>
+
+      <!-- Alertas stock -->
+      <div class="card">
+        <div class="card-title">⚠️ Alertas de Stock</div>
+        <div id="dash-alertas-lista"><div class="spinner"></div></div>
+      </div>
+
+      <!-- Últimas intervenciones -->
+      <div class="card">
+        <div class="card-title">🚗 Últimas Intervenciones</div>
+        <div id="dash-ultimas"><div class="spinner"></div></div>
+      </div>
+
+      <!-- Tareas pendientes -->
+      <div class="card">
+        <div class="card-title">📌 Tareas Pendientes</div>
+        <div id="dash-tareas-lista" style="margin-bottom:1rem;"><div class="spinner"></div></div>
+        <hr class="divider" />
+        <div style="display:grid;grid-template-columns:1fr 100px 44px;gap:0.5rem;align-items:end;">
+          <div class="field" style="margin:0;">
+            <input type="text" id="nueva-tarea-texto" placeholder="Nueva tarea..." onkeydown="if(event.key==='Enter') agregarTarea()" />
+          </div>
+          <div class="field" style="margin:0;">
+            <select id="nueva-tarea-prio">
+              <option value="normal">Normal</option>
+              <option value="alta">Alta</option>
+              <option value="baja">Baja</option>
+            </select>
+          </div>
+          <button class="btn-action" onclick="agregarTarea()" style="padding:0.65rem;">+</button>
+        </div>
+      </div>
+    </section>
+    <section id="mod-almacen" class="module">
       <div class="page-header">
         <div class="page-title">ALMACÉN <span>&</span> INVENTARIO</div>
         <div class="page-desc">Gestión de productos, compras y precio medio ponderado</div>
@@ -560,8 +618,9 @@
   </main>
 
   <nav class="bottom-nav">
-    <button class="nav-item active" id="nav-almacen" onclick="switchModule('almacen')"><span class="nav-icon">🧴</span><span>Almacén</span></button>
-    <button class="nav-item" id="nav-operaciones" onclick="switchModule('operaciones')"><span class="nav-icon">🚗</span><span>Operaciones</span></button>
+    <button class="nav-item active" id="nav-dashboard" onclick="switchModule('dashboard')"><span class="nav-icon">🏠</span><span>Inicio</span></button>
+    <button class="nav-item" id="nav-almacen" onclick="switchModule('almacen')"><span class="nav-icon">🧴</span><span>Almacén</span></button>
+    <button class="nav-item" id="nav-operaciones" onclick="switchModule('operaciones')"><span class="nav-icon">🚗</span><span>Ops</span></button>
     <button class="nav-item" id="nav-calidad" onclick="switchModule('calidad')"><span class="nav-icon">📄</span><span>Calidad</span></button>
   </nav>
 </div>
