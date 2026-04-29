@@ -1,50 +1,31 @@
 // ═══════════════════════════════════════════════════════════
-//  DetailPro — app.js
-//  Paso 1: Autenticación + Módulo Almacén (Inventario + PMP)
+//  DetailPro — app.js  (Paso 3)
+//  Auth + Almacén + Operaciones + Calidad (PDF)
 // ═══════════════════════════════════════════════════════════
 
-// ── SUPABASE CONFIG ──────────────────────────────────────────
 const SUPABASE_URL = 'https://cshcvanmccdtdotfsrot.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_2MGjrhOSj2DyrGl9SAdIYw_PF1sLZJf';
 const { createClient } = supabase;
 const db = createClient(SUPABASE_URL, SUPABASE_KEY);
 
-// ── ESTADO GLOBAL ─────────────────────────────────────────────
-let currentUser = null;
-let productosCache = [];  // Cache local para no re-fetch constante
+let currentUser   = null;
+let productosCache = [];
+let lineaCount     = 0;
+let productoUsadoCount = 0;
 
 // ═══════════════════════════════════════════════════════════
-//  UTILIDADES UI
+//  UTILIDADES
 // ═══════════════════════════════════════════════════════════
-
 function showToast(msg, type = 'success') {
   const t = document.getElementById('toast');
   t.textContent = msg;
   t.className = `show ${type}`;
-  setTimeout(() => { t.className = ''; }, 3000);
+  setTimeout(() => { t.className = ''; }, 3500);
 }
 
-function setLoading(btnId, loading) {
-  const btn = document.getElementById(btnId);
-  if (!btn) return;
-  if (loading) {
-    btn.disabled = true;
-    btn.dataset.originalText = btn.textContent;
-    btn.innerHTML = '<span class="spinner"></span>';
-  } else {
-    btn.disabled = false;
-    btn.textContent = btn.dataset.originalText || 'Guardar';
-  }
-}
-
-function fmt(num, decimals = 2) {
+function fmt(num, dec = 2) {
   if (num === null || num === undefined || isNaN(num)) return '—';
-  return Number(num).toFixed(decimals);
-}
-
-function fmtEur(num) {
-  if (num === null || num === undefined || isNaN(num)) return '—';
-  return `${fmt(num, 4)} €`;
+  return Number(num).toFixed(dec);
 }
 
 function capitalize(str) {
@@ -52,9 +33,68 @@ function capitalize(str) {
   return str.charAt(0).toUpperCase() + str.slice(1);
 }
 
+function formatFecha(str) {
+  if (!str) return '—';
+  const [y, m, d] = str.split('-');
+  return `${d}/${m}/${y}`;
+}
+
+function estadoBadge(estado) {
+  const map = {
+    abierta:    ['badge-orange', 'Abierta'],
+    en_proceso: ['badge-blue',   'En Proceso'],
+    finalizada: ['badge-green',  'Finalizada'],
+    entregada:  ['badge-gray',   'Entregada'],
+  };
+  const [cls, label] = map[estado] || ['badge-gray', estado];
+  return `<span class="badge ${cls}">${label}</span>`;
+}
+
+// ═══════════════════════════════════════════════════════════
+//  NAVEGACIÓN
+// ═══════════════════════════════════════════════════════════
+function switchModule(mod) {
+  document.querySelectorAll('.module').forEach(m => m.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById(`mod-${mod}`).classList.add('active');
+  document.getElementById(`nav-${mod}`).classList.add('active');
+  if (mod === 'operaciones') cargarIntervenciones();
+  if (mod === 'calidad') cargarCalidad();
+}
+
+function switchTab(modulo, tab) {
+  // Desactivar tabs del módulo
+  document.querySelectorAll(`#mod-${modulo} .tab-btn`).forEach(b => b.classList.remove('active'));
+  document.querySelectorAll(`#mod-${modulo} .tab-panel`).forEach(p => p.classList.remove('active'));
+  // Activar tab elegida
+  document.getElementById(`tab-${modulo}-${tab}`).classList.add('active');
+  // Activar botón correspondiente
+  event.target.classList.add('active');
+}
+
+function abrirModal(id) { document.getElementById(id).classList.add('open'); }
+function cerrarModal(id) { document.getElementById(id).classList.remove('open'); }
+
 // ═══════════════════════════════════════════════════════════
 //  AUTENTICACIÓN
 // ═══════════════════════════════════════════════════════════
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('login-password')?.addEventListener('keydown', e => {
+    if (e.key === 'Enter') handleLogin();
+  });
+
+  const today = new Date().toISOString().split('T')[0];
+  const fi = document.getElementById('compra-fecha');
+  if (fi) fi.value = today;
+
+  db.auth.getSession().then(({ data: { session } }) => {
+    if (session?.user) { currentUser = session.user; showApp(); }
+  });
+
+  db.auth.onAuthStateChange((_e, session) => {
+    if (!session && currentUser) handleLogout();
+  });
+});
 
 async function handleLogin() {
   const email    = document.getElementById('login-email').value.trim();
@@ -63,9 +103,8 @@ async function handleLogin() {
   const btn      = document.getElementById('btn-login');
 
   errDiv.style.display = 'none';
-
   if (!email || !password) {
-    errDiv.textContent = 'Por favor, introduce email y contraseña.';
+    errDiv.textContent = 'Introduce email y contraseña.';
     errDiv.style.display = 'block';
     return;
   }
@@ -76,7 +115,7 @@ async function handleLogin() {
   const { data, error } = await db.auth.signInWithPassword({ email, password });
 
   if (error) {
-    errDiv.textContent = 'Credenciales incorrectas. Verifica tu email y contraseña.';
+    errDiv.textContent = 'Credenciales incorrectas.';
     errDiv.style.display = 'block';
     btn.disabled = false;
     btn.textContent = 'Entrar al sistema';
@@ -97,33 +136,6 @@ async function handleLogout() {
   document.getElementById('login-password').value = '';
 }
 
-// Entrada presionando Enter en el campo contraseña
-document.addEventListener('DOMContentLoaded', () => {
-  document.getElementById('login-password')?.addEventListener('keydown', e => {
-    if (e.key === 'Enter') handleLogin();
-  });
-
-  // Fecha de hoy por defecto en pedidos
-  const today = new Date().toISOString().split('T')[0];
-  const fechaInput = document.getElementById('pedido-fecha');
-  if (fechaInput) fechaInput.value = today;
-
-  // Sesión activa al recargar
-  db.auth.getSession().then(({ data: { session } }) => {
-    if (session?.user) {
-      currentUser = session.user;
-      showApp();
-    }
-  });
-
-  // Listener cambios de sesión
-  db.auth.onAuthStateChange((_event, session) => {
-    if (!session && currentUser) {
-      handleLogout();
-    }
-  });
-});
-
 function showApp() {
   document.getElementById('login-screen').style.display = 'none';
   document.getElementById('app-shell').style.display = 'flex';
@@ -132,36 +144,22 @@ function showApp() {
 }
 
 // ═══════════════════════════════════════════════════════════
-//  MÓDULO: ALMACÉN
+//  MÓDULO ALMACÉN — PRODUCTOS
 // ═══════════════════════════════════════════════════════════
-
-// ── NAVEGACIÓN DE MÓDULOS ────────────────────────────────────
-function switchModule(mod) {
-  document.querySelectorAll('.module').forEach(m => m.classList.remove('active'));
-  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-  document.getElementById(`mod-${mod}`).classList.add('active');
-  document.getElementById(`nav-${mod}`).classList.add('active');
-}
-
-// ── CREAR PRODUCTO ───────────────────────────────────────────
 async function crearProducto() {
   const nombreInterno   = document.getElementById('prod-nombre-interno').value.trim();
   const nombreComercial = document.getElementById('prod-nombre-comercial').value.trim();
   const categoria       = document.getElementById('prod-categoria').value;
   const formato         = parseFloat(document.getElementById('prod-formato').value);
   const dosis           = parseFloat(document.getElementById('prod-dosis').value);
-  const precioInicial   = parseFloat(document.getElementById('prod-precio-inicial').value);
-  const stockInicial    = parseFloat(document.getElementById('prod-stock-inicial').value) || 0;
+  const precioInicial   = parseFloat(document.getElementById('prod-precio-inicial').value) || 0;
+  const stockInicial    = parseFloat(document.getElementById('prod-stock-inicial').value)  || 0;
 
   if (!nombreInterno || !nombreComercial || !categoria || !formato || !dosis) {
-    showToast('Rellena todos los campos obligatorios', 'error');
-    return;
+    showToast('Rellena todos los campos obligatorios', 'error'); return;
   }
 
-  // PMP inicial = precio pagado / (ml comprados / 1000)
-  let pmpLitro = 0;
-  let precioDosis = 0;
-
+  let pmpLitro = 0, precioDosis = 0;
   if (precioInicial > 0 && stockInicial > 0) {
     pmpLitro   = precioInicial / (stockInicial / 1000);
     precioDosis = pmpLitro * (dosis / 1000);
@@ -171,57 +169,40 @@ async function crearProducto() {
   if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>'; }
 
   const { error } = await db.from('productos').insert([{
-    nombre_interno:    nombreInterno,
-    nombre_comercial:  nombreComercial,
-    categoria,
-    formato_ml:        formato,
-    dosis_estandar_ml: dosis,
-    precio_medio_litro: pmpLitro,
-    precio_por_dosis:  precioDosis,
-    stock_actual:      stockInicial
+    nombre_interno: nombreInterno, nombre_comercial: nombreComercial,
+    categoria, formato_ml: formato, dosis_estandar_ml: dosis,
+    precio_medio_litro: pmpLitro, precio_por_dosis: precioDosis,
+    stock_actual: stockInicial
   }]);
 
   if (btn) { btn.disabled = false; btn.textContent = 'Guardar Producto'; }
 
-  if (error) {
-    console.error(error);
-    showToast('Error al guardar el producto', 'error');
-    return;
-  }
+  if (error) { showToast('Error al guardar el producto', 'error'); return; }
 
-  // Limpiar formulario
-  ['prod-nombre-interno','prod-nombre-comercial','prod-formato',
-   'prod-dosis','prod-precio-inicial','prod-stock-inicial'].forEach(id => {
-    document.getElementById(id).value = '';
-  });
+  ['prod-nombre-interno','prod-nombre-comercial','prod-formato','prod-dosis',
+   'prod-precio-inicial','prod-stock-inicial'].forEach(id => document.getElementById(id).value = '');
   document.getElementById('prod-categoria').value = '';
 
-  showToast('✓ Producto creado correctamente');
+  showToast('✓ Producto creado');
   cargarProductos();
 }
 
-// ── CARGAR PRODUCTOS ─────────────────────────────────────────
 async function cargarProductos() {
   document.getElementById('productos-loading').style.display = 'block';
   document.getElementById('productos-table-wrap').style.display = 'none';
   document.getElementById('productos-empty').style.display = 'none';
 
-  const { data, error } = await db
-    .from('productos')
-    .select('*')
-    .order('nombre_comercial', { ascending: true });
+  const { data, error } = await db.from('productos').select('*').order('nombre_comercial');
 
   document.getElementById('productos-loading').style.display = 'none';
-
-  if (error) {
-    showToast('Error al cargar productos', 'error');
-    return;
-  }
+  if (error) { showToast('Error al cargar productos', 'error'); return; }
 
   productosCache = data || [];
   renderProductosTable(productosCache);
-  renderProductosStats(productosCache);
-  populatePedidoSelect(productosCache);
+
+  const cats = new Set(productosCache.map(p => p.categoria).filter(Boolean));
+  document.getElementById('stat-total-productos').textContent = productosCache.length;
+  document.getElementById('stat-total-categorias').textContent = cats.size;
 }
 
 function renderProductosTable(productos) {
@@ -229,186 +210,792 @@ function renderProductosTable(productos) {
   const wrap  = document.getElementById('productos-table-wrap');
   const empty = document.getElementById('productos-empty');
 
-  if (!productos.length) {
-    empty.style.display = 'block';
-    wrap.style.display  = 'none';
-    return;
-  }
+  if (!productos.length) { empty.style.display = 'block'; wrap.style.display = 'none'; return; }
 
   wrap.style.display = 'block';
-
   tbody.innerHTML = productos.map(p => {
-    const categBadge = `<span class="badge badge-gray">${capitalize(p.categoria || '—')}</span>`;
     const stock = p.stock_actual ?? 0;
-    const stockClass = stock < 200 ? 'color:var(--danger)' : 'color:var(--text-secondary)';
-    return `
-      <tr>
-        <td>
-          <div style="font-weight:600; color:var(--text-primary)">${p.nombre_comercial}</div>
-          <div style="font-size:0.75rem; color:var(--text-muted)">${p.nombre_interno}</div>
-        </td>
-        <td>${categBadge}</td>
-        <td><span style="${stockClass}">${fmt(stock, 0)} ml</span></td>
-        <td class="highlight">${fmt(p.precio_medio_litro, 4)} €/L</td>
-        <td>${fmtEur(p.precio_por_dosis)}</td>
-      </tr>`;
+    const stockStyle = stock < 200 ? 'color:var(--danger)' : 'color:var(--text-secondary)';
+    return `<tr>
+      <td>
+        <div style="font-weight:600;">${p.nombre_comercial}</div>
+        <div style="font-size:0.73rem;color:var(--text-muted);">${p.nombre_interno}</div>
+      </td>
+      <td><span class="badge badge-gray">${capitalize(p.categoria||'—')}</span></td>
+      <td><span style="${stockStyle}">${fmt(stock,0)} ml</span></td>
+      <td class="highlight">${fmt(p.precio_medio_litro,4)} €</td>
+      <td>${fmt(p.precio_por_dosis,4)} €</td>
+    </tr>`;
   }).join('');
 }
 
-function renderProductosStats(productos) {
-  document.getElementById('stat-total-productos').textContent = productos.length;
-  const cats = new Set(productos.map(p => p.categoria).filter(Boolean));
-  document.getElementById('stat-total-categorias').textContent = cats.size;
+// ═══════════════════════════════════════════════════════════
+//  MÓDULO ALMACÉN — COMPRAS (PEDIDOS)
+// ═══════════════════════════════════════════════════════════
+
+// ── Líneas dinámicas ─────────────────────────────────────
+function addLineaPedido() {
+  lineaCount++;
+  const id = lineaCount;
+  const container = document.getElementById('lineas-pedido');
+
+  const options = productosCache.map(p =>
+    `<option value="${p.id}" data-pmp="${p.precio_medio_litro||0}" data-stock="${p.stock_actual||0}" data-dosis="${p.dosis_estandar_ml||0}">${p.nombre_comercial}</option>`
+  ).join('');
+
+  const div = document.createElement('div');
+  div.className = 'linea-pedido';
+  div.id = `linea-${id}`;
+  div.innerHTML = `
+    <div class="field" style="margin:0;">
+      <select class="lp-producto" onchange="actualizarResumenCompra()">
+        <option value="">Producto...</option>
+        ${options}
+      </select>
+    </div>
+    <div class="field lp-ml" style="margin:0;">
+      <input type="number" class="lp-cantidad" placeholder="ml" min="1" oninput="actualizarResumenCompra()" />
+    </div>
+    <div class="field lp-precio" style="margin:0;">
+      <input type="number" class="lp-precio-val" placeholder="€" min="0" step="0.01" oninput="actualizarResumenCompra()" />
+    </div>
+    <button class="btn-remove" onclick="removeLinea('linea-${id}')">✕</button>
+  `;
+  container.appendChild(div);
+  actualizarResumenCompra();
 }
 
-function populatePedidoSelect(productos) {
-  const sel = document.getElementById('pedido-producto');
-  const current = sel.value;
-  sel.innerHTML = '<option value="">Seleccionar producto...</option>';
-  productos.forEach(p => {
-    const opt = document.createElement('option');
-    opt.value = p.id;
-    opt.textContent = `${p.nombre_comercial} (stock: ${fmt(p.stock_actual ?? 0, 0)} ml)`;
-    opt.dataset.pmp   = p.precio_medio_litro || 0;
-    opt.dataset.stock = p.stock_actual || 0;
-    opt.dataset.dosis = p.dosis_estandar_ml || 0;
-    sel.appendChild(opt);
+function removeLinea(id) {
+  document.getElementById(id)?.remove();
+  actualizarResumenCompra();
+}
+
+function actualizarResumenCompra() {
+  const lineas = document.querySelectorAll('.linea-pedido');
+  const gastoTotal = parseFloat(document.getElementById('compra-total').value) || 0;
+  const resumen = document.getElementById('resumen-compra');
+
+  if (lineas.length === 0 && gastoTotal === 0) { resumen.style.display = 'none'; return; }
+
+  resumen.style.display = 'block';
+  document.getElementById('res-num-productos').textContent = lineas.length;
+  document.getElementById('res-gasto-total').textContent = `${fmt(gastoTotal, 2)} €`;
+}
+
+// ── Registrar Compra completa ─────────────────────────────
+async function registrarCompra() {
+  const proveedor   = document.getElementById('compra-proveedor').value.trim();
+  const fecha       = document.getElementById('compra-fecha').value;
+  const url         = document.getElementById('compra-url').value.trim();
+  const gastoTotal  = parseFloat(document.getElementById('compra-total').value) || 0;
+  const notas       = document.getElementById('compra-notas').value.trim();
+
+  if (!proveedor) { showToast('Indica el proveedor / tienda', 'error'); return; }
+  if (!fecha)     { showToast('Indica la fecha de compra', 'error'); return; }
+
+  // Recoger líneas
+  const lineas = [];
+  let lineasValidas = true;
+  document.querySelectorAll('.linea-pedido').forEach(row => {
+    const productoId = row.querySelector('.lp-producto').value;
+    const cantidad   = parseFloat(row.querySelector('.lp-cantidad').value);
+    const precio     = parseFloat(row.querySelector('.lp-precio-val').value);
+    if (!productoId || !cantidad || !precio) { lineasValidas = false; return; }
+    lineas.push({ productoId, cantidad, precio });
   });
-  if (current) sel.value = current;
-}
 
-// ── PEDIDO: PRODUCTO SELECCIONADO ────────────────────────────
-function onPedidoProductoChange() {
-  calcularPMPPreview();
-}
+  if (!lineasValidas) { showToast('Completa todos los campos de cada producto', 'error'); return; }
+  if (lineas.length === 0) { showToast('Añade al menos un producto', 'error'); return; }
 
-// ── CALCULAR PMP PREVIEW ─────────────────────────────────────
-// PMP = (Stock Actual * PMP Actual + Cantidad Nueva * Precio/ml Nueva)
-//       / (Stock Actual + Cantidad Nueva)
-function calcularPMPPreview() {
-  const sel        = document.getElementById('pedido-producto');
-  const cantidadEl = document.getElementById('pedido-cantidad');
-  const precioEl   = document.getElementById('pedido-precio');
-  const preview    = document.getElementById('pmp-preview');
-
-  const selectedOpt = sel.options[sel.selectedIndex];
-  if (!sel.value || !selectedOpt) { preview.classList.remove('visible'); return; }
-
-  const pmpActual    = parseFloat(selectedOpt.dataset.pmp)   || 0;
-  const stockActual  = parseFloat(selectedOpt.dataset.stock) || 0;
-  const dosisStd     = parseFloat(selectedOpt.dataset.dosis) || 0;
-  const cantidadNueva = parseFloat(cantidadEl.value) || 0;
-  const precioNuevo   = parseFloat(precioEl.value)   || 0;
-
-  if (!cantidadNueva || !precioNuevo) { preview.classList.remove('visible'); return; }
-
-  // Precio por ml de la nueva compra
-  const precioMlNuevo = precioNuevo / cantidadNueva;
-
-  // PMP en €/ml
-  let nuevoPmpMl;
-  if (stockActual === 0) {
-    nuevoPmpMl = precioMlNuevo;
-  } else {
-    const pmpActualMl = pmpActual / 1000;
-    nuevoPmpMl = ((stockActual * pmpActualMl) + (cantidadNueva * precioMlNuevo))
-                 / (stockActual + cantidadNueva);
-  }
-
-  const nuevoPmpLitro = nuevoPmpMl * 1000;
-  const nuevoPrecioDosis = nuevoPmpMl * dosisStd;
-  const nuevoStock = stockActual + cantidadNueva;
-
-  document.getElementById('pmp-preview-litro').textContent = `${fmt(nuevoPmpLitro, 4)} €`;
-  document.getElementById('pmp-preview-dosis').textContent = `${fmt(nuevoPrecioDosis, 4)} €`;
-  document.getElementById('pmp-preview-stock').textContent = `${fmt(nuevoStock, 0)} ml`;
-
-  preview.classList.add('visible');
-}
-
-// ── REGISTRAR PEDIDO ─────────────────────────────────────────
-async function registrarPedido() {
-  const productoId  = document.getElementById('pedido-producto').value;
-  const fecha       = document.getElementById('pedido-fecha').value;
-  const cantidadNueva = parseFloat(document.getElementById('pedido-cantidad').value);
-  const precioNuevo   = parseFloat(document.getElementById('pedido-precio').value);
-
-  if (!productoId) { showToast('Selecciona un producto', 'error'); return; }
-  if (!fecha)      { showToast('Indica la fecha del pedido', 'error'); return; }
-  if (!cantidadNueva || cantidadNueva <= 0) { showToast('Indica la cantidad en ml', 'error'); return; }
-  if (!precioNuevo || precioNuevo <= 0)     { showToast('Indica el precio total pagado', 'error'); return; }
-
-  // Obtener datos actuales del producto
-  const { data: prod, error: prodErr } = await db
-    .from('productos')
-    .select('stock_actual, precio_medio_litro, dosis_estandar_ml')
-    .eq('id', productoId)
-    .single();
-
-  if (prodErr || !prod) { showToast('Error al obtener datos del producto', 'error'); return; }
-
-  const stockActual  = prod.stock_actual || 0;
-  const pmpActual    = prod.precio_medio_litro || 0;
-  const dosisStd     = prod.dosis_estandar_ml || 0;
-
-  // Calcular nuevo PMP
-  const precioMlNuevo = precioNuevo / cantidadNueva;
-  let nuevoPmpMl;
-
-  if (stockActual === 0) {
-    nuevoPmpMl = precioMlNuevo;
-  } else {
-    const pmpActualMl = pmpActual / 1000;
-    nuevoPmpMl = ((stockActual * pmpActualMl) + (cantidadNueva * precioMlNuevo))
-                 / (stockActual + cantidadNueva);
-  }
-
-  const nuevoPmpLitro   = nuevoPmpMl * 1000;
-  const nuevoPrecioDosis = nuevoPmpMl * dosisStd;
-  const nuevoStock      = stockActual + cantidadNueva;
-
-  const btn = document.querySelector('[onclick="registrarPedido()"]');
+  const btn = document.querySelector('[onclick="registrarCompra()"]');
   if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>'; }
 
-  // 1) Insertar pedido
-  const { error: pedidoErr } = await db.from('pedidos').insert([{
-    producto_id:        productoId,
-    fecha,
-    cantidad_ml:        cantidadNueva,
-    precio_total_pagado: precioNuevo
-  }]);
+  // 1. Guardar cabecera de compra
+  const { data: compraData, error: compraErr } = await db.from('compras').insert([{
+    proveedor, url_web: url || null, fecha, gasto_total: gastoTotal, notas: notas || null
+  }]).select().single();
 
-  if (pedidoErr) {
-    console.error(pedidoErr);
-    if (btn) { btn.disabled = false; btn.textContent = 'Registrar Pedido'; }
-    showToast('Error al registrar el pedido', 'error');
-    return;
+  if (compraErr) {
+    console.error(compraErr);
+    if (btn) { btn.disabled = false; btn.textContent = 'Registrar Compra y Actualizar PMP'; }
+    showToast('Error al registrar la compra', 'error'); return;
   }
 
-  // 2) Actualizar producto con nuevo PMP y stock
-  const { error: updateErr } = await db
-    .from('productos')
-    .update({
+  // 2. Para cada línea: guardar pedido + recalcular PMP
+  for (const linea of lineas) {
+    // Obtener datos actuales del producto
+    const prod = productosCache.find(p => p.id === linea.productoId);
+    if (!prod) continue;
+
+    const stockActual = prod.stock_actual || 0;
+    const pmpActual   = prod.precio_medio_litro || 0;
+    const dosisStd    = prod.dosis_estandar_ml || 0;
+
+    const precioMlNuevo = linea.precio / linea.cantidad;
+    let nuevoPmpMl;
+    if (stockActual === 0) {
+      nuevoPmpMl = precioMlNuevo;
+    } else {
+      const pmpMlActual = pmpActual / 1000;
+      nuevoPmpMl = ((stockActual * pmpMlActual) + (linea.cantidad * precioMlNuevo))
+                   / (stockActual + linea.cantidad);
+    }
+
+    const nuevoPmpLitro    = nuevoPmpMl * 1000;
+    const nuevoPrecioDosis = nuevoPmpMl * dosisStd;
+    const nuevoStock       = stockActual + linea.cantidad;
+
+    // Insertar en pedidos
+    await db.from('pedidos').insert([{
+      producto_id: linea.productoId,
+      compra_id:   compraData.id,
+      fecha,
+      cantidad_ml: linea.cantidad,
+      precio_total_pagado: linea.precio
+    }]);
+
+    // Actualizar producto
+    await db.from('productos').update({
       precio_medio_litro: nuevoPmpLitro,
       precio_por_dosis:   nuevoPrecioDosis,
       stock_actual:       nuevoStock
-    })
-    .eq('id', productoId);
+    }).eq('id', linea.productoId);
 
-  if (btn) { btn.disabled = false; btn.textContent = 'Registrar Pedido'; }
-
-  if (updateErr) {
-    console.error(updateErr);
-    showToast('Pedido guardado pero error al actualizar PMP', 'error');
-    return;
+    // Actualizar cache local
+    prod.stock_actual        = nuevoStock;
+    prod.precio_medio_litro  = nuevoPmpLitro;
+    prod.precio_por_dosis    = nuevoPrecioDosis;
   }
 
-  // Limpiar formulario pedido
-  document.getElementById('pedido-producto').value = '';
-  document.getElementById('pedido-cantidad').value = '';
-  document.getElementById('pedido-precio').value   = '';
-  document.getElementById('pmp-preview').classList.remove('visible');
+  if (btn) { btn.disabled = false; btn.textContent = 'Registrar Compra y Actualizar PMP'; }
 
-  showToast(`✓ Pedido registrado · Nuevo PMP: ${fmt(nuevoPmpLitro, 4)} €/L`);
+  // Limpiar formulario
+  document.getElementById('compra-proveedor').value = '';
+  document.getElementById('compra-url').value       = '';
+  document.getElementById('compra-total').value     = '';
+  document.getElementById('compra-notas').value     = '';
+  document.getElementById('lineas-pedido').innerHTML = '';
+  document.getElementById('resumen-compra').style.display = 'none';
+  lineaCount = 0;
+
+  showToast(`✓ Compra registrada · ${lineas.length} producto(s) actualizados`);
   cargarProductos();
+}
+
+// ── Historial de Compras ──────────────────────────────────
+async function cargarHistorial() {
+  const loading   = document.getElementById('historial-loading');
+  const container = document.getElementById('historial-container');
+  const empty     = document.getElementById('historial-empty');
+
+  loading.style.display = 'block';
+  container.innerHTML   = '';
+  empty.style.display   = 'none';
+
+  // Traer compras con sus pedidos y productos
+  const { data: compras, error } = await db
+    .from('compras')
+    .select(`*, pedidos(cantidad_ml, precio_total_pagado, productos(nombre_comercial))`)
+    .order('fecha', { ascending: false });
+
+  loading.style.display = 'none';
+
+  if (error) { showToast('Error al cargar historial', 'error'); return; }
+  if (!compras || compras.length === 0) { empty.style.display = 'block'; return; }
+
+  container.innerHTML = compras.map(c => {
+    const lineasHTML = (c.pedidos || []).map(p => `
+      <div class="compra-linea-item">
+        <span>${p.productos?.nombre_comercial || '—'}</span>
+        <span>${fmt(p.cantidad_ml, 0)} ml · ${fmt(p.precio_total_pagado, 2)} €</span>
+      </div>`).join('');
+
+    const urlLink = c.url_web
+      ? `<a href="${c.url_web}" target="_blank" style="color:var(--accent);font-size:0.78rem;text-decoration:none;">🔗 Ver web</a>`
+      : '';
+
+    return `
+      <div class="compra-card">
+        <div class="compra-card-header">
+          <div>
+            <div class="compra-proveedor">${c.proveedor}</div>
+            <div class="compra-fecha">${formatFecha(c.fecha)} ${urlLink}</div>
+            ${c.notas ? `<div style="font-size:0.78rem;color:var(--text-muted);margin-top:0.25rem;">${c.notas}</div>` : ''}
+          </div>
+          <div class="compra-total">${fmt(c.gasto_total, 2)} €</div>
+        </div>
+        ${lineasHTML ? `<div class="compra-lineas">${lineasHTML}</div>` : ''}
+      </div>`;
+  }).join('');
+}
+
+// ═══════════════════════════════════════════════════════════
+//  MÓDULO OPERACIONES
+// ═══════════════════════════════════════════════════════════
+
+// ── Productos usados dinámicos ────────────────────────────
+function addProductoUsado() {
+  productoUsadoCount++;
+  const id = productoUsadoCount;
+  const container = document.getElementById('productos-usados-container');
+
+  const options = productosCache.map(p =>
+    `<option value="${p.id}" data-nombre="${p.nombre_comercial}" data-dosis="${p.precio_por_dosis||0}">${p.nombre_comercial}</option>`
+  ).join('');
+
+  const div = document.createElement('div');
+  div.className = 'producto-usado-row';
+  div.id = `pu-${id}`;
+  div.innerHTML = `
+    <div class="field" style="margin:0;">
+      <select class="pu-producto">
+        <option value="">Producto...</option>
+        ${options}
+      </select>
+    </div>
+    <div class="field" style="margin:0;">
+      <input type="number" class="pu-ml" placeholder="ml" min="1" />
+    </div>
+    <button class="btn-remove" onclick="document.getElementById('pu-${id}').remove()">✕</button>
+  `;
+  container.appendChild(div);
+}
+
+// ── Crear Intervención ────────────────────────────────────
+async function crearIntervencion() {
+  const matricula  = document.getElementById('int-matricula').value.trim().toUpperCase();
+  const cliente    = document.getElementById('int-cliente').value.trim();
+  const servicio   = document.getElementById('int-servicio').value;
+  const horas      = parseFloat(document.getElementById('int-horas').value) || null;
+  const precio     = parseFloat(document.getElementById('int-precio').value) || null;
+  const estado     = document.getElementById('int-estado').value;
+  const incidentes = document.getElementById('int-incidentes').value.trim();
+
+  if (!matricula) { showToast('Introduce la matrícula', 'error'); return; }
+  if (!cliente)   { showToast('Introduce el nombre del cliente', 'error'); return; }
+
+  // Recoger productos usados
+  const productosUsados = [];
+  document.querySelectorAll('.producto-usado-row').forEach(row => {
+    const productoId = row.querySelector('.pu-producto').value;
+    const ml = parseFloat(row.querySelector('.pu-ml').value);
+    if (!productoId || !ml) return;
+    const prod = productosCache.find(p => p.id === productoId);
+    productosUsados.push({
+      id: productoId,
+      nombre: prod?.nombre_comercial || '',
+      nombre_comercial: prod?.nombre_comercial || '',
+      ml_usados: ml,
+      coste: (prod?.precio_por_dosis || 0) * (ml / (prod?.dosis_estandar_ml || 1))
+    });
+  });
+
+  const btn = document.querySelector('[onclick="crearIntervencion()"]');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>'; }
+
+  const { error } = await db.from('intervenciones').insert([{
+    matricula, cliente_nombre: cliente, servicio_id: null,
+    horas_reales: horas, precio_cobrado: precio,
+    productos_usados: productosUsados.length ? productosUsados : null,
+    incidentes: incidentes || null, estado,
+    nombre_servicio: servicio || null
+  }]);
+
+  if (btn) { btn.disabled = false; btn.textContent = 'Guardar Intervención'; }
+
+  if (error) {
+    console.error(error);
+    showToast('Error al guardar la intervención', 'error'); return;
+  }
+
+  // Limpiar
+  ['int-matricula','int-cliente','int-horas','int-precio','int-incidentes'].forEach(id => {
+    document.getElementById(id).value = '';
+  });
+  document.getElementById('int-servicio').value = '';
+  document.getElementById('int-estado').value   = 'abierta';
+  document.getElementById('productos-usados-container').innerHTML = '';
+  productoUsadoCount = 0;
+
+  showToast('✓ Intervención guardada');
+  switchModule('operaciones');
+  switchTabDirect('operaciones', 'lista');
+}
+
+function switchTabDirect(modulo, tab) {
+  document.querySelectorAll(`#mod-${modulo} .tab-btn`).forEach(b => b.classList.remove('active'));
+  document.querySelectorAll(`#mod-${modulo} .tab-panel`).forEach(p => p.classList.remove('active'));
+  document.getElementById(`tab-${modulo}-${tab}`).classList.add('active');
+  // Activar el primer botón que corresponde al tab
+  const btns = document.querySelectorAll(`#mod-${modulo} .tab-btn`);
+  if (tab === 'lista' && btns[0]) btns[0].classList.add('active');
+  if (tab === 'nueva' && btns[1]) btns[1].classList.add('active');
+}
+
+// ── Cargar Intervenciones ─────────────────────────────────
+async function cargarIntervenciones() {
+  const loading   = document.getElementById('intervenciones-loading');
+  const container = document.getElementById('intervenciones-container');
+  const empty     = document.getElementById('intervenciones-empty');
+
+  loading.style.display = 'block';
+  container.innerHTML   = '';
+  empty.style.display   = 'none';
+
+  const { data, error } = await db
+    .from('intervenciones')
+    .select('*')
+    .order('created_at', { ascending: false });
+
+  loading.style.display = 'none';
+
+  if (error) { showToast('Error al cargar intervenciones', 'error'); return; }
+  if (!data || data.length === 0) { empty.style.display = 'block'; return; }
+
+  container.innerHTML = data.map(inv => {
+    const productos = inv.productos_usados || [];
+    const numProductos = productos.length;
+    return `
+      <div class="intervencion-card" onclick="verIntervencion('${inv.id}')">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+          <div>
+            <div class="intervencion-matricula">${inv.matricula}</div>
+            <div class="intervencion-cliente">${inv.cliente_nombre}</div>
+          </div>
+          ${estadoBadge(inv.estado)}
+        </div>
+        <div class="intervencion-meta">
+          ${inv.nombre_servicio ? `<span class="badge badge-gray">${inv.nombre_servicio}</span>` : ''}
+          ${inv.horas_reales ? `<span class="badge badge-blue">⏱ ${inv.horas_reales}h</span>` : ''}
+          ${inv.precio_cobrado ? `<span class="badge badge-green">💰 ${fmt(inv.precio_cobrado,2)} €</span>` : ''}
+          ${numProductos > 0 ? `<span class="badge badge-orange">🧴 ${numProductos} prod.</span>` : ''}
+        </div>
+        <div style="font-size:0.73rem;color:var(--text-muted);margin-top:0.5rem;">
+          ${new Date(inv.created_at).toLocaleDateString('es-ES')}
+        </div>
+      </div>`;
+  }).join('');
+}
+
+// ── Ver detalle Intervención ──────────────────────────────
+async function verIntervencion(id) {
+  const { data: inv, error } = await db
+    .from('intervenciones').select('*').eq('id', id).single();
+  if (error || !inv) return;
+
+  const productos = inv.productos_usados || [];
+  const costeMateriales = productos.reduce((s, p) => s + (p.coste || 0), 0);
+  const rentabilidad = inv.precio_cobrado
+    ? `${fmt(inv.precio_cobrado, 2)} € - ${fmt(costeMateriales, 2)} € = <span class="highlight">${fmt(inv.precio_cobrado - costeMateriales, 2)} €</span>`
+    : '—';
+
+  document.getElementById('modal-int-titulo').innerHTML =
+    `<span>${inv.matricula}</span> — ${inv.cliente_nombre}`;
+
+  document.getElementById('modal-int-contenido').innerHTML = `
+    <div style="display:grid;gap:0.75rem;">
+      <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
+        ${estadoBadge(inv.estado)}
+        ${inv.nombre_servicio ? `<span class="badge badge-gray">${inv.nombre_servicio}</span>` : ''}
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.5rem;">
+        <div style="background:var(--bg-input);border-radius:0.4rem;padding:0.75rem;">
+          <div style="font-size:0.7rem;color:var(--text-muted);margin-bottom:0.25rem;">HORAS</div>
+          <div style="font-family:'Barlow Condensed',sans-serif;font-size:1.3rem;font-weight:700;">${inv.horas_reales || '—'} h</div>
+        </div>
+        <div style="background:var(--bg-input);border-radius:0.4rem;padding:0.75rem;">
+          <div style="font-size:0.7rem;color:var(--text-muted);margin-bottom:0.25rem;">PRECIO COBRADO</div>
+          <div style="font-family:'Barlow Condensed',sans-serif;font-size:1.3rem;font-weight:700;color:var(--accent);">${inv.precio_cobrado ? fmt(inv.precio_cobrado,2)+' €' : '—'}</div>
+        </div>
+      </div>
+      ${productos.length > 0 ? `
+        <div>
+          <div style="font-size:0.72rem;font-weight:600;letter-spacing:0.09em;text-transform:uppercase;color:var(--text-secondary);margin-bottom:0.5rem;">Productos Usados</div>
+          ${productos.map(p => `
+            <div style="display:flex;justify-content:space-between;padding:0.4rem 0;border-bottom:1px solid var(--border);font-size:0.85rem;">
+              <span>${p.nombre_comercial || p.nombre}</span>
+              <span style="color:var(--text-muted)">${p.ml_usados} ml · ${fmt(p.coste,4)} €</span>
+            </div>`).join('')}
+          <div style="display:flex;justify-content:space-between;padding:0.4rem 0;font-size:0.85rem;margin-top:0.25rem;">
+            <span style="color:var(--text-secondary);">Coste total materiales</span>
+            <span class="highlight">${fmt(costeMateriales,4)} €</span>
+          </div>
+        </div>` : ''}
+      <div>
+        <div style="font-size:0.72rem;font-weight:600;letter-spacing:0.09em;text-transform:uppercase;color:var(--text-secondary);margin-bottom:0.35rem;">Rentabilidad Bruta</div>
+        <div style="font-size:0.9rem;">${rentabilidad}</div>
+      </div>
+      ${inv.incidentes ? `
+        <div>
+          <div style="font-size:0.72rem;font-weight:600;letter-spacing:0.09em;text-transform:uppercase;color:var(--text-secondary);margin-bottom:0.35rem;">Incidentes / Observaciones</div>
+          <div style="font-size:0.85rem;color:var(--text-secondary);background:var(--bg-input);border-radius:0.4rem;padding:0.75rem;">${inv.incidentes}</div>
+        </div>` : ''}
+      <div style="display:flex;gap:0.5rem;margin-top:0.25rem;">
+        <button class="btn-secondary" onclick="cerrarModal('modal-intervencion')">Cerrar</button>
+        <button class="btn-action" onclick="cambiarEstado('${inv.id}', '${inv.estado}')">Cambiar Estado</button>
+      </div>
+    </div>
+  `;
+
+  abrirModal('modal-intervencion');
+}
+
+async function cambiarEstado(id, estadoActual) {
+  const estados = ['abierta', 'en_proceso', 'finalizada', 'entregada'];
+  const idx = estados.indexOf(estadoActual);
+  const nuevoEstado = estados[(idx + 1) % estados.length];
+
+  const { error } = await db.from('intervenciones').update({ estado: nuevoEstado }).eq('id', id);
+  if (error) { showToast('Error al actualizar estado', 'error'); return; }
+
+  cerrarModal('modal-intervencion');
+  showToast(`✓ Estado actualizado: ${nuevoEstado}`);
+  cargarIntervenciones();
+}
+
+// ═══════════════════════════════════════════════════════════
+//  MÓDULO CALIDAD
+// ═══════════════════════════════════════════════════════════
+
+let costeHoraConfig = 25; // €/hora por defecto, editable
+
+async function cargarCalidad() {
+  const sel = document.getElementById('calidad-intervencion-sel');
+  if (!sel) return;
+  sel.innerHTML = '<option value="">Cargando...</option>';
+
+  const { data, error } = await db
+    .from('intervenciones')
+    .select('id, matricula, cliente_nombre, nombre_servicio, estado')
+    .order('created_at', { ascending: false });
+
+  if (error || !data) { sel.innerHTML = '<option value="">Error al cargar</option>'; return; }
+
+  sel.innerHTML = '<option value="">Selecciona una intervención...</option>';
+  data.forEach(inv => {
+    const opt = document.createElement('option');
+    opt.value = inv.id;
+    opt.textContent = `${inv.matricula} — ${inv.cliente_nombre} (${inv.nombre_servicio || 'Sin servicio'})`;
+    sel.appendChild(opt);
+  });
+}
+
+async function cargarVistaPrevia() {
+  const id = document.getElementById('calidad-intervencion-sel').value;
+  const preview = document.getElementById('calidad-preview');
+  const empty   = document.getElementById('calidad-empty');
+  const costeH  = parseFloat(document.getElementById('calidad-coste-hora').value) || 25;
+  costeHoraConfig = costeH;
+
+  if (!id) { preview.style.display = 'none'; empty.style.display = 'block'; return; }
+
+  const { data: inv, error } = await db
+    .from('intervenciones').select('*').eq('id', id).single();
+
+  if (error || !inv) return;
+
+  const productos = inv.productos_usados || [];
+  const costeMat  = productos.reduce((s, p) => s + (p.coste || 0), 0);
+  const costeHoras = (inv.horas_reales || 0) * costeH;
+  const beneficio  = (inv.precio_cobrado || 0) - costeMat - costeHoras;
+
+  // Vista previa cliente
+  document.getElementById('prev-matricula').textContent   = inv.matricula;
+  document.getElementById('prev-cliente').textContent     = inv.cliente_nombre;
+  document.getElementById('prev-servicio').textContent    = inv.nombre_servicio || '—';
+  document.getElementById('prev-fecha').textContent       = new Date(inv.created_at).toLocaleDateString('es-ES');
+  document.getElementById('prev-estado').innerHTML        = estadoBadge(inv.estado);
+
+  // Productos
+  const prodHTML = productos.length
+    ? productos.map(p => `
+        <div style="display:flex;justify-content:space-between;padding:0.4rem 0;border-bottom:1px solid var(--border);font-size:0.85rem;">
+          <span>✓ ${p.nombre_comercial || p.nombre}</span>
+          <span style="color:var(--text-muted)">${p.ml_usados} ml</span>
+        </div>`).join('')
+    : '<div style="color:var(--text-muted);font-size:0.85rem;">Sin productos registrados</div>';
+  document.getElementById('prev-productos').innerHTML = prodHTML;
+
+  // Rentabilidad
+  document.getElementById('prev-precio').textContent    = `${fmt(inv.precio_cobrado || 0, 2)} €`;
+  document.getElementById('prev-coste-mat').textContent = `${fmt(costeMat, 2)} €`;
+  document.getElementById('prev-coste-horas').textContent = `${fmt(costeHoras, 2)} € (${inv.horas_reales || 0}h × ${costeH} €/h)`;
+  document.getElementById('prev-beneficio').textContent = `${fmt(beneficio, 2)} €`;
+  document.getElementById('prev-beneficio').style.color = beneficio >= 0 ? 'var(--success)' : 'var(--danger)';
+
+  // Incidentes
+  document.getElementById('prev-incidentes').textContent = inv.incidentes || 'Sin observaciones';
+
+  // Guardar id para PDF
+  document.getElementById('calidad-preview').dataset.invId = id;
+  document.getElementById('calidad-preview').dataset.costeH = costeH;
+
+  preview.style.display = 'block';
+  empty.style.display   = 'none';
+}
+
+// ── Generar PDF Cliente ───────────────────────────────────
+async function generarPDFCliente() {
+  const id = document.getElementById('calidad-preview').dataset.invId;
+  if (!id) return;
+
+  const { data: inv } = await db.from('intervenciones').select('*').eq('id', id).single();
+  if (!inv) return;
+
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
+
+  const naranja = [249, 115, 22];
+  const gris    = [30, 30, 30];
+  const grisClaro = [60, 60, 60];
+  const blanco  = [240, 240, 240];
+
+  // Fondo negro
+  doc.setFillColor(...gris);
+  doc.rect(0, 0, 210, 297, 'F');
+
+  // Cabecera naranja
+  doc.setFillColor(...naranja);
+  doc.rect(0, 0, 210, 28, 'F');
+
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(22);
+  doc.setFont('helvetica', 'bold');
+  doc.text('DETAILPRO', 15, 18);
+
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'normal');
+  doc.text('Informe de Calidad — Cliente', 15, 24);
+  doc.text(`Fecha: ${new Date(inv.created_at).toLocaleDateString('es-ES')}`, 150, 18);
+
+  // Datos vehículo
+  let y = 40;
+  doc.setTextColor(...blanco);
+  doc.setFontSize(14);
+  doc.setFont('helvetica', 'bold');
+  doc.text('DATOS DEL VEHÍCULO', 15, y); y += 8;
+
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(...[180, 180, 180]);
+  doc.text(`Matrícula:`, 15, y);
+  doc.setTextColor(...blanco);
+  doc.setFont('helvetica', 'bold');
+  doc.text(inv.matricula, 50, y); y += 6;
+
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(...[180, 180, 180]);
+  doc.text(`Cliente:`, 15, y);
+  doc.setTextColor(...blanco);
+  doc.text(inv.cliente_nombre, 50, y); y += 6;
+
+  doc.setTextColor(...[180, 180, 180]);
+  doc.text(`Servicio:`, 15, y);
+  doc.setTextColor(...naranja);
+  doc.text(inv.nombre_servicio || '—', 50, y); y += 6;
+
+  doc.setTextColor(...[180, 180, 180]);
+  doc.text(`Estado:`, 15, y);
+  doc.setTextColor(...blanco);
+  doc.text(inv.estado?.toUpperCase() || '—', 50, y); y += 12;
+
+  // Separador
+  doc.setDrawColor(...naranja);
+  doc.setLineWidth(0.5);
+  doc.line(15, y, 195, y); y += 8;
+
+  // Productos usados
+  doc.setTextColor(...blanco);
+  doc.setFontSize(13);
+  doc.setFont('helvetica', 'bold');
+  doc.text('PRODUCTOS APLICADOS', 15, y); y += 8;
+
+  const productos = inv.productos_usados || [];
+  if (productos.length === 0) {
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(...[180, 180, 180]);
+    doc.text('Sin productos registrados', 15, y); y += 8;
+  } else {
+    productos.forEach(p => {
+      doc.setFillColor(45, 45, 45);
+      doc.roundedRect(15, y - 4, 180, 8, 1, 1, 'F');
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(...naranja);
+      doc.text('✓', 18, y);
+      doc.setTextColor(...blanco);
+      doc.setFont('helvetica', 'normal');
+      doc.text(p.nombre_comercial || p.nombre, 25, y);
+      doc.setTextColor(...[180, 180, 180]);
+      doc.text(`${p.ml_usados} ml aplicados`, 155, y, { align: 'right' });
+      y += 10;
+    });
+  }
+
+  y += 4;
+  doc.setDrawColor(...naranja);
+  doc.line(15, y, 195, y); y += 8;
+
+  // Observaciones
+  doc.setTextColor(...blanco);
+  doc.setFontSize(13);
+  doc.setFont('helvetica', 'bold');
+  doc.text('OBSERVACIONES TÉCNICAS', 15, y); y += 8;
+
+  doc.setFontSize(9);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(...[180, 180, 180]);
+  const obs = inv.incidentes || 'Sin observaciones registradas.';
+  const obsLines = doc.splitTextToSize(obs, 175);
+  doc.text(obsLines, 15, y); y += obsLines.length * 5 + 8;
+
+  // Footer
+  doc.setFillColor(...naranja);
+  doc.rect(0, 285, 210, 12, 'F');
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(8);
+  doc.setFont('helvetica', 'normal');
+  doc.text('DetailPro — Sistema de Gestión de Calidad y Operaciones', 105, 292, { align: 'center' });
+
+  doc.save(`informe_cliente_${inv.matricula}_${inv.created_at.split('T')[0]}.pdf`);
+  showToast('✓ PDF cliente generado');
+}
+
+// ── Generar PDF Interno ───────────────────────────────────
+async function generarPDFInterno() {
+  const id     = document.getElementById('calidad-preview').dataset.invId;
+  const costeH = parseFloat(document.getElementById('calidad-preview').dataset.costeH) || 25;
+  if (!id) return;
+
+  const { data: inv } = await db.from('intervenciones').select('*').eq('id', id).single();
+  if (!inv) return;
+
+  const productos    = inv.productos_usados || [];
+  const costeMat     = productos.reduce((s, p) => s + (p.coste || 0), 0);
+  const costeHoras   = (inv.horas_reales || 0) * costeH;
+  const beneficio    = (inv.precio_cobrado || 0) - costeMat - costeHoras;
+  const margen       = inv.precio_cobrado ? (beneficio / inv.precio_cobrado * 100) : 0;
+
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
+
+  const naranja   = [249, 115, 22];
+  const gris      = [30, 30, 30];
+  const blanco    = [240, 240, 240];
+  const grisClaro = [180, 180, 180];
+
+  doc.setFillColor(...gris);
+  doc.rect(0, 0, 210, 297, 'F');
+
+  // Cabecera
+  doc.setFillColor(20, 20, 20);
+  doc.rect(0, 0, 210, 28, 'F');
+  doc.setFillColor(...naranja);
+  doc.rect(0, 0, 4, 28, 'F');
+
+  doc.setTextColor(...blanco);
+  doc.setFontSize(20);
+  doc.setFont('helvetica', 'bold');
+  doc.text('INFORME INTERNO DE RENTABILIDAD', 12, 14);
+  doc.setFontSize(9);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(...grisClaro);
+  doc.text(`Generado: ${new Date().toLocaleDateString('es-ES')} — USO INTERNO`, 12, 22);
+
+  let y = 40;
+
+  // Datos intervención
+  const datosRows = [
+    ['Matrícula', inv.matricula],
+    ['Cliente', inv.cliente_nombre],
+    ['Servicio', inv.nombre_servicio || '—'],
+    ['Horas reales', `${inv.horas_reales || 0} h`],
+    ['Estado', inv.estado?.toUpperCase()],
+  ];
+  datosRows.forEach(([k, v]) => {
+    doc.setFontSize(9);
+    doc.setTextColor(...grisClaro);
+    doc.setFont('helvetica', 'normal');
+    doc.text(k, 15, y);
+    doc.setTextColor(...blanco);
+    doc.setFont('helvetica', 'bold');
+    doc.text(String(v || '—'), 70, y);
+    y += 7;
+  });
+
+  y += 4;
+  doc.setDrawColor(...naranja);
+  doc.setLineWidth(0.3);
+  doc.line(15, y, 195, y); y += 8;
+
+  // Tabla rentabilidad
+  doc.setFontSize(12);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(...blanco);
+  doc.text('DESGLOSE ECONÓMICO', 15, y); y += 8;
+
+  const filas = [
+    ['Precio Cobrado', `+ ${fmt(inv.precio_cobrado || 0, 2)} €`, naranja],
+    ['Coste Materiales', `- ${fmt(costeMat, 2)} €`, [239, 68, 68]],
+    [`Coste Mano de Obra (${inv.horas_reales || 0}h × ${costeH}€)`, `- ${fmt(costeHoras, 2)} €`, [239, 68, 68]],
+  ];
+
+  filas.forEach(([label, valor, color]) => {
+    doc.setFillColor(40, 40, 40);
+    doc.roundedRect(15, y - 5, 180, 9, 1, 1, 'F');
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(...grisClaro);
+    doc.text(label, 18, y);
+    doc.setTextColor(...color);
+    doc.setFont('helvetica', 'bold');
+    doc.text(valor, 192, y, { align: 'right' });
+    y += 11;
+  });
+
+  // Resultado final
+  doc.setFillColor(...naranja);
+  doc.roundedRect(15, y - 5, 180, 12, 2, 2, 'F');
+  doc.setFontSize(12);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(255, 255, 255);
+  doc.text('BENEFICIO BRUTO', 18, y + 2);
+  doc.text(`${fmt(beneficio, 2)} €  (${fmt(margen, 1)}%)`, 192, y + 2, { align: 'right' });
+  y += 18;
+
+  // Productos detalle
+  if (productos.length > 0) {
+    doc.setDrawColor(...naranja);
+    doc.line(15, y, 195, y); y += 8;
+    doc.setFontSize(11);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(...blanco);
+    doc.text('DETALLE DE MATERIALES', 15, y); y += 8;
+
+    productos.forEach(p => {
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(...grisClaro);
+      doc.text(`• ${p.nombre_comercial || p.nombre}`, 18, y);
+      doc.setTextColor(...blanco);
+      doc.text(`${p.ml_usados} ml`, 130, y);
+      doc.setTextColor(...naranja);
+      doc.text(`${fmt(p.coste, 4)} €`, 192, y, { align: 'right' });
+      y += 6;
+    });
+  }
+
+  // Footer
+  doc.setFillColor(20, 20, 20);
+  doc.rect(0, 283, 210, 14, 'F');
+  doc.setFillColor(...naranja);
+  doc.rect(0, 283, 4, 14, 'F');
+  doc.setTextColor(...grisClaro);
+  doc.setFontSize(8);
+  doc.setFont('helvetica', 'normal');
+  doc.text('DOCUMENTO DE USO INTERNO — DetailPro Sistema de Gestión', 12, 292);
+
+  doc.save(`rentabilidad_interna_${inv.matricula}_${inv.created_at.split('T')[0]}.pdf`);
+  showToast('✓ PDF interno generado');
 }
