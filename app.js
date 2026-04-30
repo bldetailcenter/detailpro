@@ -1241,21 +1241,26 @@ function resetMapaDanos() {
 // ═══════════════════════════════════════════════════════════
 
 async function cargarDashboard() {
-  const ahora   = new Date();
+  const ahora    = new Date();
   const primerDia = new Date(ahora.getFullYear(), ahora.getMonth(), 1).toISOString().split('T')[0];
   const hoy       = ahora.toISOString().split('T')[0];
+  const en7dias   = new Date(ahora.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
   // Lanzar todas las queries en paralelo
   const [
     { data: intervMes },
     { data: intervTotal },
     { data: productos },
-    { data: tareas }
+    { data: tareas },
+    { data: citasHoy },
+    { data: citasProximas }
   ] = await Promise.all([
     db.from('intervenciones').select('precio_cobrado, productos_usados, horas_reales, estado').gte('created_at', primerDia),
     db.from('intervenciones').select('id, matricula, cliente_nombre, nombre_servicio, estado, created_at').order('created_at', { ascending: false }).limit(5),
     db.from('productos').select('*'),
-    db.from('tareas').select('*').eq('completada', false).order('created_at', { ascending: false })
+    db.from('tareas').select('*').eq('completada', false).order('created_at', { ascending: false }),
+    db.from('citas').select('*').eq('fecha', hoy).neq('estado','cancelada').order('hora', { ascending: true }),
+    db.from('citas').select('id').gt('fecha', hoy).lte('fecha', en7dias).neq('estado','cancelada')
   ]);
 
   // ── Stats del mes ────────────────────────────────────────
@@ -1266,14 +1271,41 @@ async function cargarDashboard() {
   document.getElementById('dash-ingresos').textContent   = `${fmt(totalIngresos, 2)} €`;
   document.getElementById('dash-servicios').textContent  = totalServicios;
   document.getElementById('dash-pendientes').textContent = pendientes;
+  document.getElementById('dash-stock-critico').textContent = (productos || []).filter(p => stockStatus(p.stock_actual ?? 0, p.formato_ml).label !== 'OK').length;
+
+  // ── Citas de hoy ─────────────────────────────────────────
+  const citasHoyData = citasHoy || [];
+  const citasHoyEl   = document.getElementById('dash-citas-hoy');
+  const citasProxEl  = document.getElementById('dash-citas-proximas');
+  if (citasHoyEl)    citasHoyEl.textContent  = citasHoyData.length;
+  if (citasProxEl)   citasProxEl.textContent = (citasProximas || []).length;
+
+  const citasContainer = document.getElementById('dash-citas-lista');
+  if (citasContainer) {
+    if (!citasHoyData.length) {
+      citasContainer.innerHTML = '<div style="color:var(--text-muted);font-size:0.85rem;">Sin citas para hoy</div>';
+    } else {
+      citasContainer.innerHTML = citasHoyData.map(c => {
+        const ec = { pendiente:'#f59e0b', confirmada:'#22c55e', completada:'#6b7280', cancelada:'#ef4444' };
+        const col = ec[c.estado] || 'var(--accent)';
+        return `
+          <div style="display:flex;gap:0.65rem;align-items:flex-start;padding:0.55rem 0;border-bottom:1px solid var(--border);">
+            <div style="width:3px;border-radius:2px;background:${col};align-self:stretch;flex-shrink:0;margin-top:2px;"></div>
+            <div style="flex:1;">
+              <div style="display:flex;justify-content:space-between;align-items:center;">
+                <span style="font-family:'Barlow Condensed',sans-serif;font-size:1rem;font-weight:700;">${c.hora ? c.hora.slice(0,5)+' · ' : ''}${c.matricula || c.cliente_nombre}</span>
+                <span style="font-size:0.7rem;padding:0.12rem 0.45rem;border-radius:99px;background:${col}22;color:${col};">${c.estado}</span>
+              </div>
+              <div style="font-size:0.78rem;color:var(--text-muted);">${c.cliente_nombre || ''} ${c.servicio ? '· '+c.servicio : ''}</div>
+              ${c.notas ? `<div style="font-size:0.74rem;color:var(--text-muted);margin-top:0.15rem;">${c.notas}</div>` : ''}
+            </div>
+          </div>`;
+      }).join('');
+    }
+  }
 
   // ── Alertas stock ────────────────────────────────────────
-  const stockAlertas = (productos || []).filter(p => {
-    const s = stockStatus(p.stock_actual ?? 0, p.formato_ml);
-    return s.label !== 'OK';
-  });
-  document.getElementById('dash-stock-critico').textContent = stockAlertas.length;
-
+  const stockAlertas = (productos || []).filter(p => stockStatus(p.stock_actual ?? 0, p.formato_ml).label !== 'OK');
   const alertasContainer = document.getElementById('dash-alertas-lista');
   if (stockAlertas.length === 0) {
     alertasContainer.innerHTML = '<div style="color:var(--success);font-size:0.85rem;">✓ Todo el stock en niveles correctos</div>';
