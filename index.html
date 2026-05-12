@@ -680,6 +680,58 @@
       </div>
     </section>
 
+    <!-- ══ SERVICIOS ══ -->
+    <section id="mod-servicios" class="module">
+      <div class="page-header">
+        <div class="page-title">CATÁLOGO <span>&</span> SERVICIOS</div>
+        <div class="page-desc">Define los servicios disponibles con precio y descripción</div>
+      </div>
+      <div class="tabs">
+        <button class="tab-btn active" onclick="switchTab('servicios','lista')">⚙️ Mis Servicios</button>
+        <button class="tab-btn" onclick="switchTab('servicios','nuevo')">➕ Nuevo Servicio</button>
+      </div>
+
+      <!-- Lista servicios -->
+      <div class="tab-panel active" id="tab-servicios-lista">
+        <div id="servicios-loading" style="text-align:center;padding:2rem;color:var(--text-muted);"><div class="spinner"></div></div>
+        <div id="servicios-container"></div>
+        <div id="servicios-empty" class="empty-state" style="display:none;">
+          <div class="empty-state-icon">⚙️</div>
+          <div class="empty-state-text">No hay servicios definidos aún</div>
+        </div>
+      </div>
+
+      <!-- Nuevo servicio -->
+      <div class="tab-panel" id="tab-servicios-nuevo">
+        <div class="card">
+          <div class="card-title">➕ Nuevo Servicio</div>
+          <div class="field-group cols-2">
+            <div class="field"><label>Nombre del Servicio</label><input type="text" id="serv-nombre" placeholder="Ej: Pulido Completo" /></div>
+            <div class="field"><label>Precio Base (€)</label><input type="number" id="serv-precio" placeholder="0.00" min="0" step="0.01" /></div>
+          </div>
+          <div class="field-group cols-2">
+            <div class="field"><label>Duración Estimada (h)</label><input type="number" id="serv-duracion" placeholder="2.5" min="0" step="0.5" /></div>
+            <div class="field">
+              <label>Estado</label>
+              <select id="serv-activo">
+                <option value="true">Activo</option>
+                <option value="false">Inactivo</option>
+              </select>
+            </div>
+          </div>
+          <div class="field">
+            <label>Descripción</label>
+            <textarea id="serv-descripcion" placeholder="Descripción general del servicio..."></textarea>
+          </div>
+          <div class="field">
+            <label>¿Qué incluye?</label>
+            <textarea id="serv-incluye" placeholder="Ej: Descontaminación química, pulido one step, sellado con cera carnauba..."></textarea>
+          </div>
+          <button class="btn-action" onclick="crearServicio()">Guardar Servicio</button>
+        </div>
+      </div>
+    </section>
+
       <!-- ══ CALENDARIO ══ -->
       <section id="mod-calendario" class="module">
         <div class="page-header">
@@ -788,13 +840,22 @@
     <button class="nav-item" id="nav-almacen" onclick="switchModule('almacen')"><span class="nav-icon">🧴</span><span>Almacén</span></button>
     <button class="nav-item" id="nav-calendario" onclick="switchModule('calendario')"><span class="nav-icon">📅</span><span>Citas</span></button>
     <button class="nav-item" id="nav-operaciones" onclick="switchModule('operaciones')"><span class="nav-icon">🚗</span><span>Ops</span></button>
+    <button class="nav-item" id="nav-servicios" onclick="switchModule('servicios')"><span class="nav-icon">⚙️</span><span>Servicios</span></button>
     <button class="nav-item" id="nav-historico" onclick="switchModule('historico')"><span class="nav-icon">🔍</span><span>Búsqueda</span></button>
     <button class="nav-item" id="nav-calidad" onclick="switchModule('calidad')"><span class="nav-icon">📄</span><span>Calidad</span></button>
   </nav>
 </div>
 
+<!-- MODAL SERVICIO -->
+<div class="modal-overlay" id="modal-servicio">
+  <div class="modal">
+    <button class="btn-close-modal" onclick="cerrarModal('modal-servicio')">✕</button>
+    <div class="modal-title" id="modal-serv-titulo">SERVICIO</div>
+    <div id="modal-serv-contenido"></div>
+  </div>
+</div>
+
 <!-- MODAL DETALLE PRODUCTO -->
-<div class="modal-overlay" id="modal-producto">
   <div class="modal">
     <button class="btn-close-modal" onclick="cerrarModal('modal-producto')">✕</button>
     <div class="modal-title" id="modal-prod-titulo">PRODUCTO</div>
