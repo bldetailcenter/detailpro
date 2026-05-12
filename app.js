@@ -58,7 +58,7 @@ function switchModule(mod) {
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   document.getElementById(`mod-${mod}`).classList.add('active');
   document.getElementById(`nav-${mod}`).classList.add('active');
-  if (mod === 'operaciones') cargarIntervenciones();
+  if (mod === 'operaciones') { cargarIntervenciones(); cargarSelectorServicios(); }
   if (mod === 'calidad')     cargarCalidad();
   if (mod === 'dashboard')   cargarDashboard();
   if (mod === 'calendario')  iniciarCalendario();
@@ -534,7 +534,6 @@ function addProductoUsado() {
 async function crearIntervencion() {
   const matricula  = document.getElementById('int-matricula').value.trim().toUpperCase();
   const cliente    = document.getElementById('int-cliente').value.trim();
-  const servicio   = document.getElementById('int-servicio').value;
   const horas      = parseFloat(document.getElementById('int-horas').value) || null;
   const precio     = parseFloat(document.getElementById('int-precio').value) || null;
   const estado     = document.getElementById('int-estado').value;
@@ -542,6 +541,12 @@ async function crearIntervencion() {
 
   if (!matricula) { showToast('Introduce la matrícula', 'error'); return; }
   if (!cliente)   { showToast('Introduce el nombre del cliente', 'error'); return; }
+
+  // Servicios seleccionados
+  const serviciosNombres = serviciosSeleccionados
+    .map(id => serviciosCache.find(s => s.id === id)?.nombre)
+    .filter(Boolean);
+  const nombreServicio = serviciosNombres.join(' + ') || null;
 
   // Recoger productos usados
   const productosUsados = [];
@@ -574,7 +579,8 @@ async function crearIntervencion() {
     productos_usados: productosUsados.length ? productosUsados : null,
     mapa_danos: mapaData,
     incidentes: incidentes || null, estado,
-    nombre_servicio: servicio || null
+    nombre_servicio: nombreServicio,
+    servicios_ids: serviciosSeleccionados.length ? serviciosSeleccionados : null
   }]);
 
   if (btn) { btn.disabled = false; btn.textContent = 'Guardar Intervención'; }
@@ -605,6 +611,9 @@ async function crearIntervencion() {
   document.getElementById('productos-usados-container').innerHTML = '';
   productoUsadoCount = 0;
   resetMapaDanos();
+  serviciosSeleccionados = [];
+  document.getElementById('int-precio-sugerido').style.display = 'none';
+  cargarSelectorServicios();
 
   showToast('✓ Intervención guardada · Stock actualizado');
   switchModule('operaciones');
@@ -1987,4 +1996,76 @@ async function eliminarServicio(id) {
   cerrarModal('modal-servicio');
   showToast('✓ Servicio eliminado');
   cargarServicios();
+}
+
+// ═══════════════════════════════════════════════════════════
+//  SELECTOR MÚLTIPLE DE SERVICIOS EN INTERVENCIONES
+// ═══════════════════════════════════════════════════════════
+
+let serviciosSeleccionados = []; // array de ids seleccionados
+
+async function cargarSelectorServicios() {
+  const container = document.getElementById('int-servicios-selector');
+  if (!container) return;
+
+  // Usar cache si existe, si no cargar
+  let servicios = serviciosCache;
+  if (!servicios.length) {
+    const { data } = await db.from('servicios').select('*').eq('activo', true).order('nombre');
+    servicios = data || [];
+    serviciosCache = servicios;
+  }
+
+  serviciosSeleccionados = [];
+
+  if (!servicios.length) {
+    container.innerHTML = `<div style="color:var(--text-muted);font-size:0.82rem;">
+      Sin servicios definidos. <span style="color:var(--accent);cursor:pointer;" onclick="switchModule('servicios')">Crear servicios →</span>
+    </div>`;
+    return;
+  }
+
+  container.innerHTML = servicios.map(s => `
+    <button
+      onclick="toggleServicio('${s.id}', ${s.precio_base || 0}, ${s.duracion_horas || 0})"
+      id="serv-btn-${s.id}"
+      style="padding:0.4rem 0.85rem;border-radius:99px;font-size:0.8rem;font-weight:600;
+             border:1px solid var(--border);background:transparent;color:var(--text-secondary);
+             cursor:pointer;transition:all 0.15s;white-space:nowrap;">
+      ${s.nombre}${s.precio_base ? ' · '+fmt(s.precio_base,0)+'€' : ''}
+    </button>`).join('');
+}
+
+function toggleServicio(id, precio, horas) {
+  const btn = document.getElementById(`serv-btn-${id}`);
+  const idx = serviciosSeleccionados.indexOf(id);
+
+  if (idx === -1) {
+    serviciosSeleccionados.push(id);
+    btn.style.background  = 'var(--accent)';
+    btn.style.borderColor = 'var(--accent)';
+    btn.style.color       = '#fff';
+  } else {
+    serviciosSeleccionados.splice(idx, 1);
+    btn.style.background  = 'transparent';
+    btn.style.borderColor = 'var(--border)';
+    btn.style.color       = 'var(--text-secondary)';
+  }
+
+  // Calcular precio sugerido y horas sumadas
+  let precioTotal = 0;
+  let horasTotal  = 0;
+  serviciosSeleccionados.forEach(sid => {
+    const s = serviciosCache.find(s => s.id === sid);
+    if (s) { precioTotal += s.precio_base || 0; horasTotal += s.duracion_horas || 0; }
+  });
+
+  const sugerido = document.getElementById('int-precio-sugerido');
+  const sugeridoVal = document.getElementById('int-precio-sugerido-val');
+  if (serviciosSeleccionados.length > 0) {
+    sugerido.style.display = 'block';
+    sugeridoVal.textContent = `${fmt(precioTotal, 2)} €${horasTotal ? ' · '+horasTotal+'h est.' : ''}`;
+  } else {
+    sugerido.style.display = 'none';
+  }
 }
