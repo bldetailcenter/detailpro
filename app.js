@@ -63,6 +63,7 @@ function switchModule(mod) {
   if (mod === 'dashboard')   cargarDashboard();
   if (mod === 'calendario')  iniciarCalendario();
   if (mod === 'historico')   resetHistorico();
+  if (mod === 'servicios')   cargarServicios();
 }
 
 function switchTab(modulo, tab) {
@@ -1869,4 +1870,121 @@ function verProducto(id) {
   `;
 
   abrirModal('modal-producto');
+}
+
+// ═══════════════════════════════════════════════════════════
+//  MÓDULO SERVICIOS
+// ═══════════════════════════════════════════════════════════
+
+let serviciosCache = [];
+
+async function cargarServicios() {
+  document.getElementById('servicios-loading').style.display = 'block';
+  document.getElementById('servicios-container').innerHTML  = '';
+  document.getElementById('servicios-empty').style.display  = 'none';
+
+  const { data, error } = await db
+    .from('servicios').select('*').order('nombre');
+
+  document.getElementById('servicios-loading').style.display = 'none';
+  if (error) { showToast('Error al cargar servicios', 'error'); return; }
+
+  serviciosCache = data || [];
+
+  if (!serviciosCache.length) {
+    document.getElementById('servicios-empty').style.display = 'block'; return;
+  }
+
+  document.getElementById('servicios-container').innerHTML = serviciosCache.map(s => `
+    <div class="compra-card" style="cursor:pointer;" onclick="verServicio('${s.id}')">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+        <div style="flex:1;">
+          <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.25rem;">
+            <span style="font-family:'Barlow Condensed',sans-serif;font-size:1.1rem;font-weight:800;">${s.nombre}</span>
+            <span class="badge ${s.activo ? 'badge-green' : 'badge-gray'}">${s.activo ? 'Activo' : 'Inactivo'}</span>
+          </div>
+          ${s.descripcion ? `<div style="font-size:0.82rem;color:var(--text-secondary);margin-bottom:0.35rem;">${s.descripcion}</div>` : ''}
+          ${s.incluye ? `<div style="font-size:0.78rem;color:var(--text-muted);">✓ ${s.incluye.replace(/\n/g,'  ·  ')}</div>` : ''}
+        </div>
+        <div style="text-align:right;flex-shrink:0;margin-left:0.75rem;">
+          ${s.precio_base ? `<div style="font-family:'Barlow Condensed',sans-serif;font-size:1.3rem;font-weight:800;color:var(--accent);">${fmt(s.precio_base,2)} €</div>` : ''}
+          ${s.duracion_horas ? `<div style="font-size:0.78rem;color:var(--text-muted);">⏱ ${s.duracion_horas}h</div>` : ''}
+        </div>
+      </div>
+    </div>`).join('');
+}
+
+function verServicio(id) {
+  const s = serviciosCache.find(s => s.id === id);
+  if (!s) return;
+
+  document.getElementById('modal-serv-titulo').textContent = s.nombre;
+  document.getElementById('modal-serv-contenido').innerHTML = `
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.65rem;margin-bottom:1rem;">
+      <div style="background:var(--bg-input);border-radius:0.4rem;padding:0.75rem;">
+        <div style="font-size:0.7rem;color:var(--text-muted);margin-bottom:0.2rem;">PRECIO BASE</div>
+        <div style="font-family:'Barlow Condensed',sans-serif;font-size:1.4rem;font-weight:800;color:var(--accent);">${s.precio_base ? fmt(s.precio_base,2)+' €' : '—'}</div>
+      </div>
+      <div style="background:var(--bg-input);border-radius:0.4rem;padding:0.75rem;">
+        <div style="font-size:0.7rem;color:var(--text-muted);margin-bottom:0.2rem;">DURACIÓN EST.</div>
+        <div style="font-family:'Barlow Condensed',sans-serif;font-size:1.4rem;font-weight:800;">${s.duracion_horas ? s.duracion_horas+'h' : '—'}</div>
+      </div>
+    </div>
+    ${s.descripcion ? `
+      <div style="margin-bottom:0.75rem;">
+        <div style="font-size:0.72rem;font-weight:600;letter-spacing:0.09em;text-transform:uppercase;color:var(--text-secondary);margin-bottom:0.35rem;">Descripción</div>
+        <div style="font-size:0.85rem;color:var(--text-secondary);">${s.descripcion}</div>
+      </div>` : ''}
+    ${s.incluye ? `
+      <div style="margin-bottom:1rem;">
+        <div style="font-size:0.72rem;font-weight:600;letter-spacing:0.09em;text-transform:uppercase;color:var(--text-secondary);margin-bottom:0.35rem;">¿Qué incluye?</div>
+        <div style="background:var(--accent-dim);border:1px solid rgba(59,130,246,0.2);border-radius:0.4rem;padding:0.85rem;font-size:0.85rem;color:var(--text-secondary);line-height:1.6;">${s.incluye}</div>
+      </div>` : ''}
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.5rem;">
+      <button class="btn-secondary" onclick="cerrarModal('modal-servicio')">Cerrar</button>
+      <button class="btn-danger" onclick="eliminarServicio('${s.id}')">Eliminar</button>
+    </div>`;
+
+  abrirModal('modal-servicio');
+}
+
+async function crearServicio() {
+  const nombre     = document.getElementById('serv-nombre').value.trim();
+  const precio     = parseFloat(document.getElementById('serv-precio').value) || null;
+  const duracion   = parseFloat(document.getElementById('serv-duracion').value) || null;
+  const activo     = document.getElementById('serv-activo').value === 'true';
+  const descripcion = document.getElementById('serv-descripcion').value.trim();
+  const incluye    = document.getElementById('serv-incluye').value.trim();
+
+  if (!nombre) { showToast('El nombre es obligatorio', 'error'); return; }
+
+  const btn = document.querySelector('[onclick="crearServicio()"]');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>'; }
+
+  const { error } = await db.from('servicios').insert([{
+    nombre, precio_base: precio, duracion_horas: duracion,
+    activo, descripcion: descripcion || null, incluye: incluye || null
+  }]);
+
+  if (btn) { btn.disabled = false; btn.textContent = 'Guardar Servicio'; }
+  if (error) { showToast('Error al guardar servicio', 'error'); return; }
+
+  ['serv-nombre','serv-precio','serv-duracion','serv-descripcion','serv-incluye'].forEach(id => {
+    document.getElementById(id).value = '';
+  });
+  document.getElementById('serv-activo').value = 'true';
+
+  showToast('✓ Servicio creado');
+  cargarServicios();
+  switchTabDirect('servicios', 'lista');
+  document.querySelectorAll('#mod-servicios .tab-btn')[0].classList.add('active');
+  document.querySelectorAll('#mod-servicios .tab-btn')[1].classList.remove('active');
+}
+
+async function eliminarServicio(id) {
+  if (!confirm('¿Eliminar este servicio?')) return;
+  await db.from('servicios').delete().eq('id', id);
+  cerrarModal('modal-servicio');
+  showToast('✓ Servicio eliminado');
+  cargarServicios();
 }
