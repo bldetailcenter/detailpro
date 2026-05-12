@@ -462,26 +462,26 @@
             <div class="field"><label>Matrícula</label><input type="text" id="int-matricula" placeholder="0000 AAA" style="text-transform:uppercase;" /></div>
             <div class="field"><label>Nombre Cliente</label><input type="text" id="int-cliente" placeholder="Nombre del cliente" /></div>
           </div>
-          <div class="field-group cols-2">
-            <div class="field">
-              <label>Servicio</label>
-              <select id="int-servicio">
-                <option value="">Seleccionar...</option>
-                <option value="Lavado Básico">Lavado Básico</option>
-                <option value="Lavado Completo">Lavado Completo</option>
-                <option value="Descontaminación">Descontaminación</option>
-                <option value="Pulido One Step">Pulido One Step</option>
-                <option value="Pulido Completo">Pulido Completo</option>
-                <option value="Sellado / Cera">Sellado / Cera</option>
-                <option value="Revestimiento Cerámico">Revestimiento Cerámico</option>
-                <option value="Interior Completo">Interior Completo</option>
-                <option value="Detailing Completo">Detailing Completo</option>
-              </select>
+
+          <!-- SELECTOR MÚLTIPLE DE SERVICIOS -->
+          <div style="margin-bottom:1rem;">
+            <div style="font-size:0.72rem;font-weight:600;letter-spacing:0.09em;text-transform:uppercase;color:var(--text-secondary);margin-bottom:0.5rem;">Servicios a realizar</div>
+            <div id="int-servicios-selector" style="display:flex;flex-wrap:wrap;gap:0.4rem;min-height:36px;">
+              <div style="color:var(--text-muted);font-size:0.82rem;padding:0.4rem 0;">Cargando servicios...</div>
             </div>
+            <div style="font-size:0.72rem;color:var(--text-muted);margin-top:0.35rem;">Toca para seleccionar · puedes elegir varios</div>
+          </div>
+
+          <!-- Precio sugerido -->
+          <div id="int-precio-sugerido" style="display:none;background:var(--accent-dim);border:1px solid rgba(59,130,246,0.2);border-radius:0.4rem;padding:0.6rem 0.85rem;font-size:0.82rem;margin-bottom:0.75rem;color:var(--text-secondary);">
+            💡 Precio base sugerido: <span id="int-precio-sugerido-val" style="color:var(--accent);font-weight:600;">—</span>
+          </div>
+
+          <div class="field-group cols-2">
             <div class="field"><label>Horas Reales</label><input type="number" id="int-horas" placeholder="2.5" min="0" step="0.5" /></div>
+            <div class="field"><label>Precio Cobrado (€)</label><input type="number" id="int-precio" placeholder="0.00" min="0" step="0.01" /></div>
           </div>
           <div class="field-group cols-2">
-            <div class="field"><label>Precio Cobrado (€)</label><input type="number" id="int-precio" placeholder="0.00" min="0" step="0.01" /></div>
             <div class="field">
               <label>Estado</label>
               <select id="int-estado">
