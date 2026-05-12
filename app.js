@@ -162,6 +162,7 @@ async function crearProducto() {
   const dosis           = parseFloat(document.getElementById('prod-dosis').value);
   const precioInicial   = parseFloat(document.getElementById('prod-precio-inicial').value) || 0;
   const stockInicial    = parseFloat(document.getElementById('prod-stock-inicial').value)  || 0;
+  const observaciones   = document.getElementById('prod-observaciones').value.trim();
 
   if (!nombreInterno || !nombreComercial || !categoria || !formato || !dosis) {
     showToast('Rellena todos los campos obligatorios', 'error'); return;
@@ -180,7 +181,8 @@ async function crearProducto() {
     nombre_interno: nombreInterno, nombre_comercial: nombreComercial,
     categoria, formato_ml: formato, dosis_estandar_ml: dosis,
     precio_medio_litro: pmpLitro, precio_por_dosis: precioDosis,
-    stock_actual: stockInicial
+    stock_actual: stockInicial,
+    observaciones: observaciones || null
   }]);
 
   if (btn) { btn.disabled = false; btn.textContent = 'Guardar Producto'; }
@@ -188,7 +190,7 @@ async function crearProducto() {
   if (error) { showToast('Error al guardar el producto', 'error'); return; }
 
   ['prod-nombre-interno','prod-nombre-comercial','prod-formato','prod-dosis',
-   'prod-precio-inicial','prod-stock-inicial'].forEach(id => document.getElementById(id).value = '');
+   'prod-precio-inicial','prod-stock-inicial','prod-observaciones'].forEach(id => document.getElementById(id).value = '');
   document.getElementById('prod-categoria').value = '';
 
   showToast('✓ Producto creado');
@@ -250,10 +252,11 @@ function renderProductosTable(productos) {
     const stock  = p.stock_actual ?? 0;
     const status = stockStatus(stock, p.formato_ml);
     const dosisRestantes = p.dosis_estandar_ml > 0 ? Math.floor(stock / p.dosis_estandar_ml) : '—';
-    return `<tr>
+    return `<tr style="cursor:pointer;" onclick="verProducto('${p.id}')">
       <td>
         <div style="font-weight:600;">${p.nombre_comercial}</div>
         <div style="font-size:0.73rem;color:var(--text-muted);">${p.nombre_interno}</div>
+        ${p.observaciones ? `<div style="font-size:0.7rem;color:var(--accent);margin-top:0.1rem;">📝 Ver notas</div>` : ''}
       </td>
       <td><span class="badge badge-gray">${capitalize(p.categoria||'—')}</span></td>
       <td>
@@ -1819,4 +1822,51 @@ async function generarPDFHistorico() {
 
   doc.save(`historial_${q.replace(/\s/g,'_')}_${new Date().toISOString().split('T')[0]}.pdf`);
   showToast('✓ PDF historial generado');
+}
+
+// ── Ver detalle producto ──────────────────────────────────
+function verProducto(id) {
+  const p = productosCache.find(p => p.id === id);
+  if (!p) return;
+  const status = stockStatus(p.stock_actual ?? 0, p.formato_ml);
+
+  document.getElementById('modal-prod-titulo').innerHTML =
+    `${p.nombre_comercial} <span style="font-size:1rem;color:var(--text-muted);">· ${capitalize(p.categoria)}</span>`;
+
+  document.getElementById('modal-prod-contenido').innerHTML = `
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.65rem;margin-bottom:1rem;">
+      <div style="background:var(--bg-input);border-radius:0.4rem;padding:0.75rem;">
+        <div style="font-size:0.7rem;color:var(--text-muted);margin-bottom:0.2rem;">STOCK ACTUAL</div>
+        <div style="font-family:'Barlow Condensed',sans-serif;font-size:1.3rem;font-weight:700;color:${status.color};">${fmt(p.stock_actual??0,0)} ml</div>
+        <div style="font-size:0.72rem;color:var(--text-muted);">${status.icon} ${status.label}</div>
+      </div>
+      <div style="background:var(--bg-input);border-radius:0.4rem;padding:0.75rem;">
+        <div style="font-size:0.7rem;color:var(--text-muted);margin-bottom:0.2rem;">PMP · €/DOSIS</div>
+        <div style="font-family:'Barlow Condensed',sans-serif;font-size:1.1rem;font-weight:700;color:var(--accent);">${fmt(p.precio_medio_litro,4)} €/L</div>
+        <div style="font-size:0.8rem;color:var(--text-secondary);">${fmt(p.precio_por_dosis,4)} € por ${p.dosis_estandar_ml} ml</div>
+      </div>
+      <div style="background:var(--bg-input);border-radius:0.4rem;padding:0.75rem;">
+        <div style="font-size:0.7rem;color:var(--text-muted);margin-bottom:0.2rem;">FORMATO</div>
+        <div style="font-size:0.9rem;font-weight:600;">${fmt(p.formato_ml,0)} ml</div>
+      </div>
+      <div style="background:var(--bg-input);border-radius:0.4rem;padding:0.75rem;">
+        <div style="font-size:0.7rem;color:var(--text-muted);margin-bottom:0.2rem;">DOSIS RESTANTES</div>
+        <div style="font-size:0.9rem;font-weight:600;">${p.dosis_estandar_ml > 0 ? Math.floor((p.stock_actual??0) / p.dosis_estandar_ml) : '—'}</div>
+      </div>
+    </div>
+    ${p.observaciones ? `
+      <div>
+        <div style="font-size:0.72rem;font-weight:600;letter-spacing:0.09em;text-transform:uppercase;color:var(--text-secondary);margin-bottom:0.4rem;">📝 Observaciones / Modo de Uso</div>
+        <div style="background:var(--accent-dim);border:1px solid rgba(59,130,246,0.2);border-radius:0.4rem;padding:0.85rem;font-size:0.85rem;color:var(--text-secondary);line-height:1.5;">${p.observaciones}</div>
+      </div>` : '<div style="color:var(--text-muted);font-size:0.85rem;">Sin observaciones registradas</div>'}
+    <div style="margin-top:1rem;">
+      <div style="font-size:0.72rem;font-weight:600;letter-spacing:0.09em;text-transform:uppercase;color:var(--text-secondary);margin-bottom:0.4rem;">Nombre Interno</div>
+      <div style="font-size:0.85rem;color:var(--text-muted);">${p.nombre_interno}</div>
+    </div>
+    <div style="margin-top:1rem;">
+      <button class="btn-secondary" onclick="cerrarModal('modal-producto')" style="width:100%;">Cerrar</button>
+    </div>
+  `;
+
+  abrirModal('modal-producto');
 }
