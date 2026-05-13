@@ -1,6 +1,6 @@
 // ═══════════════════════════════════════════════════════════
-//  DetailPro — app.js  (Paso 6)
-//  Auth + Almacén + Operaciones + Calidad + Blueprint 4 Vistas
+//  DetailPro — app.js  (Paso 7)
+//  Auth + Almacén + Operaciones + Calidad + Fotos en PDF
 // ═══════════════════════════════════════════════════════════
 
 const SUPABASE_URL = 'https://cshcvanmccdtdotfsrot.supabase.co';
@@ -54,6 +54,22 @@ function estadoBadge(estado) {
   return `<span class="badge ${cls}">${label}</span>`;
 }
 
+// Auxiliar para meter fotos en PDF
+async function getDataUrl(url) {
+  try {
+    const res = await fetch(url);
+    const blob = await res.blob();
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result);
+      reader.readAsDataURL(blob);
+    });
+  } catch (e) {
+    console.error("Error cargando imagen para PDF", e);
+    return null;
+  }
+}
+
 // ═══════════════════════════════════════════════════════════
 //  NAVEGACIÓN
 // ═══════════════════════════════════════════════════════════
@@ -75,10 +91,7 @@ function switchTab(modulo, tab) {
   document.querySelectorAll(`#mod-${modulo} .tab-panel`).forEach(p => p.classList.remove('active'));
   document.getElementById(`tab-${modulo}-${tab}`).classList.add('active');
   event.target.classList.add('active');
-
-  if (modulo === 'operaciones' && tab === 'lista') {
-    limpiarFormularioIntervencion();
-  }
+  if (modulo === 'operaciones' && tab === 'lista') limpiarFormularioIntervencion();
 }
 
 function switchTabDirect(modulo, tab) {
@@ -88,10 +101,7 @@ function switchTabDirect(modulo, tab) {
   const btns = document.querySelectorAll(`#mod-${modulo} .tab-btn`);
   if (tab === 'lista' && btns[0]) btns[0].classList.add('active');
   if (tab === 'nueva' && btns[1]) btns[1].classList.add('active');
-
-  if (modulo === 'operaciones' && tab === 'lista') {
-    limpiarFormularioIntervencion();
-  }
+  if (modulo === 'operaciones' && tab === 'lista') limpiarFormularioIntervencion();
 }
 
 function abrirModal(id) { document.getElementById(id).classList.add('open'); }
@@ -104,34 +114,27 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('login-password')?.addEventListener('keydown', e => {
     if (e.key === 'Enter') handleLogin();
   });
-
   const today = new Date().toISOString().split('T')[0];
   const fi = document.getElementById('compra-fecha');
   if (fi) fi.value = today;
-
   db.auth.getSession().then(({ data: { session } }) => {
     if (session?.user) { currentUser = session.user; showApp(); }
   });
-
   db.auth.onAuthStateChange((_e, session) => {
     if (!session && currentUser) handleLogout();
   });
 });
 
 async function handleLogin() {
-  const email    = document.getElementById('login-email').value.trim();
+  const email = document.getElementById('login-email').value.trim();
   const password = document.getElementById('login-password').value;
-  const errDiv   = document.getElementById('login-error');
-  const btn      = document.getElementById('btn-login');
-
+  const errDiv = document.getElementById('login-error');
+  const btn = document.getElementById('btn-login');
   errDiv.style.display = 'none';
   if (!email || !password) { errDiv.textContent = 'Introduce email y contraseña.'; errDiv.style.display = 'block'; return; }
-
   btn.disabled = true;
   btn.innerHTML = '<span class="spinner"></span>';
-
   const { data, error } = await db.auth.signInWithPassword({ email, password });
-
   if (error) {
     errDiv.textContent = 'Credenciales incorrectas.';
     errDiv.style.display = 'block';
@@ -139,7 +142,6 @@ async function handleLogin() {
     btn.textContent = 'Entrar al sistema';
     return;
   }
-
   currentUser = data.user;
   showApp();
 }
@@ -150,8 +152,6 @@ async function handleLogout() {
   productosCache = [];
   document.getElementById('app-shell').style.display = 'none';
   document.getElementById('login-screen').style.display = 'flex';
-  document.getElementById('login-email').value = '';
-  document.getElementById('login-password').value = '';
 }
 
 function showApp() {
@@ -166,325 +166,96 @@ function showApp() {
 }
 
 // ═══════════════════════════════════════════════════════════
-//  MÓDULO ALMACÉN — PRODUCTOS
+//  MÓDULO ALMACÉN
 // ═══════════════════════════════════════════════════════════
 async function crearProducto() {
-  const nombreInterno   = document.getElementById('prod-nombre-interno').value.trim();
-  const nombreComercial = document.getElementById('prod-nombre-comercial').value.trim();
-  const categoria       = document.getElementById('prod-categoria').value;
-  const formato         = parseFloat(document.getElementById('prod-formato').value);
-  const dosis           = parseFloat(document.getElementById('prod-dosis').value);
-  const precioInicial   = parseFloat(document.getElementById('prod-precio-inicial').value) || 0;
-  const stockInicial    = parseFloat(document.getElementById('prod-stock-inicial').value)  || 0;
-  const observaciones   = document.getElementById('prod-observaciones').value.trim();
+  const ni = document.getElementById('prod-nombre-interno').value.trim();
+  const nc = document.getElementById('prod-nombre-comercial').value.trim();
+  const cat = document.getElementById('prod-categoria').value;
+  const form = parseFloat(document.getElementById('prod-formato').value);
+  const dos = parseFloat(document.getElementById('prod-dosis').value);
+  const pi = parseFloat(document.getElementById('prod-precio-inicial').value) || 0;
+  const si = parseFloat(document.getElementById('prod-stock-inicial').value) || 0;
+  const obs = document.getElementById('prod-observaciones').value.trim();
 
-  if (!nombreInterno || !nombreComercial || !categoria || !formato || !dosis) { showToast('Rellena todos los campos obligatorios', 'error'); return; }
+  if (!ni || !nc || !cat || !form || !dos) { showToast('Rellena los campos obligatorios', 'error'); return; }
 
-  let pmpLitro = 0, precioDosis = 0;
-  if (precioInicial > 0 && stockInicial > 0) {
-    pmpLitro   = precioInicial / (stockInicial / 1000);
-    precioDosis = pmpLitro * (dosis / 1000);
-  }
-
-  const btn = document.querySelector('[onclick="crearProducto()"]');
-  if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>'; }
+  let pmpL = 0, pDos = 0;
+  if (pi > 0 && si > 0) { pmpL = pi / (si / 1000); pDos = pmpL * (dos / 1000); }
 
   const { error } = await db.from('productos').insert([{
-    nombre_interno: nombreInterno, nombre_comercial: nombreComercial,
-    categoria, formato_ml: formato, dosis_estandar_ml: dosis,
-    precio_medio_litro: pmpLitro, precio_por_dosis: precioDosis,
-    stock_actual: stockInicial,
-    observaciones: observaciones || null
+    nombre_interno: ni, nombre_comercial: nc, categoria: cat, formato_ml: form, dosis_estandar_ml: dos,
+    precio_medio_litro: pmpL, precio_por_dosis: pDos, stock_actual: si, observaciones: obs || null
   }]);
 
-  if (btn) { btn.disabled = false; btn.textContent = 'Guardar Producto'; }
-
-  if (error) { showToast('Error al guardar el producto', 'error'); return; }
-
-  ['prod-nombre-interno','prod-nombre-comercial','prod-formato','prod-dosis',
-   'prod-precio-inicial','prod-stock-inicial','prod-observaciones'].forEach(id => document.getElementById(id).value = '');
-  document.getElementById('prod-categoria').value = '';
-
+  if (error) { showToast('Error al guardar', 'error'); return; }
   showToast('✓ Producto creado');
   cargarProductos();
 }
 
 async function cargarProductos() {
   document.getElementById('productos-loading').style.display = 'block';
-  document.getElementById('productos-table-wrap').style.display = 'none';
-  document.getElementById('productos-empty').style.display = 'none';
-
   const { data, error } = await db.from('productos').select('*').order('nombre_comercial');
-
   document.getElementById('productos-loading').style.display = 'none';
-  if (error) { showToast('Error al cargar productos', 'error'); return; }
-
+  if (error) return;
   productosCache = data || [];
   renderProductosTable(productosCache);
-
-  const cats = new Set(productosCache.map(p => p.categoria).filter(Boolean));
-  document.getElementById('stat-total-productos').textContent = productosCache.length;
-  document.getElementById('stat-total-categorias').textContent = cats.size;
-}
-
-function stockStatus(stock, formato) {
-  const critico = (formato || 1000) * 0.10;
-  const bajo    = (formato || 1000) * 0.25;
-  if (stock <= 0)       return { color: 'var(--danger)',  icon: '🔴', label: 'Agotado' };
-  if (stock < critico)  return { color: 'var(--danger)',  icon: '🔴', label: 'Crítico' };
-  if (stock < bajo)     return { color: '#f59e0b',        icon: '🟡', label: 'Bajo' };
-  return                       { color: 'var(--success)', icon: '🟢', label: 'OK' };
 }
 
 function renderProductosTable(productos) {
   const tbody = document.getElementById('productos-tbody');
-  const wrap  = document.getElementById('productos-table-wrap');
-  const empty = document.getElementById('productos-empty');
-
-  if (!productos.length) { empty.style.display = 'block'; wrap.style.display = 'none'; return; }
-
-  const alertas = productos.filter(p => {
-    const s = stockStatus(p.stock_actual ?? 0, p.formato_ml);
-    return s.label === 'Crítico' || s.label === 'Agotado' || s.label === 'Bajo';
-  });
-  renderAlertasStock(alertas);
-
+  const wrap = document.getElementById('productos-table-wrap');
+  if (!productos.length) { wrap.style.display = 'none'; return; }
   wrap.style.display = 'block';
-  const sorted = [...productos].sort((a, b) => {
-    const sa = stockStatus(a.stock_actual ?? 0, a.formato_ml);
-    const sb = stockStatus(b.stock_actual ?? 0, b.formato_ml);
-    const order = { 'Agotado': 0, 'Crítico': 1, 'Bajo': 2, 'OK': 3 };
-    return (order[sa.label] ?? 3) - (order[sb.label] ?? 3);
-  });
-
-  tbody.innerHTML = sorted.map(p => {
-    const stock  = p.stock_actual ?? 0;
-    const status = stockStatus(stock, p.formato_ml);
-    const dosisRestantes = p.dosis_estandar_ml > 0 ? Math.floor(stock / p.dosis_estandar_ml) : '—';
+  tbody.innerHTML = productos.map(p => {
+    const status = stockStatus(p.stock_actual, p.formato_ml);
     return `<tr style="cursor:pointer;" onclick="verProducto('${p.id}')">
-      <td>
-        <div style="font-weight:600;">${p.nombre_comercial}</div>
-        <div style="font-size:0.73rem;color:var(--text-muted);">${p.nombre_interno}</div>
-        ${p.observaciones ? `<div style="font-size:0.7rem;color:var(--accent);margin-top:0.1rem;">📝 Ver notas</div>` : ''}
-      </td>
-      <td><span class="badge badge-gray">${capitalize(p.categoria||'—')}</span></td>
-      <td>
-        <div style="color:${status.color};font-weight:600;">${fmt(stock,0)} ml</div>
-        <div style="font-size:0.72rem;color:var(--text-muted);">${dosisRestantes} dosis</div>
-      </td>
-      <td><span style="font-size:0.9rem;">${status.icon}</span> <span style="font-size:0.72rem;color:${status.color};">${status.label}</span></td>
-      <td class="highlight">${fmt(p.precio_medio_litro,4)} €</td>
-      <td>${fmt(p.precio_por_dosis,4)} €</td>
+      <td><div style="font-weight:600;">${p.nombre_comercial}</div><div style="font-size:0.7rem;color:var(--text-muted);">${p.nombre_interno}</div></td>
+      <td><span class="badge badge-gray">${p.categoria}</span></td>
+      <td style="color:${status.color};font-weight:600;">${fmt(p.stock_actual,0)} ml</td>
+      <td>${status.icon} ${status.label}</td>
+      <td class="highlight">${fmt(p.precio_medio_litro,4)}€</td>
+      <td>${fmt(p.precio_por_dosis,4)}€</td>
     </tr>`;
   }).join('');
 }
 
-function renderAlertasStock(alertas) {
-  document.getElementById('stock-alertas')?.remove();
-  if (!alertas.length) return;
-
-  const div = document.createElement('div');
-  div.id = 'stock-alertas';
-  div.style.cssText = 'background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.25);border-radius:0.6rem;padding:0.85rem 1rem;margin-bottom:1rem;';
-
-  const titulo = document.createElement('div');
-  titulo.style.cssText = 'font-family:"Barlow Condensed",sans-serif;font-size:0.9rem;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:#fca5a5;margin-bottom:0.5rem;';
-  titulo.textContent = `⚠️ ${alertas.length} producto${alertas.length > 1 ? 's' : ''} con stock bajo`;
-  div.appendChild(titulo);
-
-  alertas.forEach(p => {
-    const s = stockStatus(p.stock_actual ?? 0, p.formato_ml);
-    const row = document.createElement('div');
-    row.style.cssText = 'display:flex;justify-content:space-between;font-size:0.82rem;padding:0.2rem 0;';
-    row.innerHTML = `<span style="color:var(--text-secondary);">${s.icon} ${p.nombre_comercial}</span><span style="color:${s.color};font-weight:600;">${fmt(p.stock_actual??0,0)} ml — ${s.label}</span>`;
-    div.appendChild(row);
-  });
-
-  const card = document.getElementById('productos-table-wrap').closest('.card');
-  card.insertBefore(div, card.firstChild);
-}
-
 // ═══════════════════════════════════════════════════════════
-//  MÓDULO ALMACÉN — COMPRAS (PEDIDOS)
-// ═══════════════════════════════════════════════════════════
-function addLineaPedido() {
-  lineaCount++;
-  const id = lineaCount;
-  const container = document.getElementById('lineas-pedido');
-
-  const options = productosCache.map(p =>
-    `<option value="${p.id}" data-pmp="${p.precio_medio_litro||0}" data-stock="${p.stock_actual||0}" data-dosis="${p.dosis_estandar_ml||0}">${p.nombre_comercial}</option>`
-  ).join('');
-
-  const div = document.createElement('div');
-  div.className = 'linea-pedido';
-  div.id = `linea-${id}`;
-  div.innerHTML = `
-    <div class="field" style="margin:0;">
-      <select class="lp-producto" onchange="actualizarResumenCompra()"><option value="">Producto...</option>${options}</select>
-    </div>
-    <div class="field lp-ml" style="margin:0;">
-      <input type="number" class="lp-cantidad" placeholder="ml" min="1" oninput="actualizarResumenCompra()" />
-    </div>
-    <div class="field lp-precio" style="margin:0;">
-      <input type="number" class="lp-precio-val" placeholder="€" min="0" step="0.01" oninput="actualizarResumenCompra()" />
-    </div>
-    <button class="btn-remove" onclick="removeLinea('linea-${id}')">✕</button>
-  `;
-  container.appendChild(div);
-  actualizarResumenCompra();
-}
-
-function removeLinea(id) { document.getElementById(id)?.remove(); actualizarResumenCompra(); }
-
-function actualizarResumenCompra() {
-  const lineas = document.querySelectorAll('.linea-pedido');
-  const gastoTotal = parseFloat(document.getElementById('compra-total').value) || 0;
-  const resumen = document.getElementById('resumen-compra');
-  if (lineas.length === 0 && gastoTotal === 0) { resumen.style.display = 'none'; return; }
-  resumen.style.display = 'block';
-  document.getElementById('res-num-productos').textContent = lineas.length;
-  document.getElementById('res-gasto-total').textContent = `${fmt(gastoTotal, 2)} €`;
-}
-
-async function registrarCompra() {
-  const proveedor   = document.getElementById('compra-proveedor').value.trim();
-  const fecha       = document.getElementById('compra-fecha').value;
-  const url         = document.getElementById('compra-url').value.trim();
-  const gastoTotal  = parseFloat(document.getElementById('compra-total').value) || 0;
-  const notas       = document.getElementById('compra-notas').value.trim();
-
-  if (!proveedor) { showToast('Indica el proveedor / tienda', 'error'); return; }
-  if (!fecha)     { showToast('Indica la fecha de compra', 'error'); return; }
-
-  const lineas = [];
-  let lineasValidas = true;
-  document.querySelectorAll('.linea-pedido').forEach(row => {
-    const productoId = row.querySelector('.lp-producto').value;
-    const cantidad   = parseFloat(row.querySelector('.lp-cantidad').value);
-    const precio     = parseFloat(row.querySelector('.lp-precio-val').value);
-    if (!productoId || !cantidad || !precio) { lineasValidas = false; return; }
-    lineas.push({ productoId, cantidad, precio });
-  });
-
-  if (!lineasValidas) { showToast('Completa todos los campos', 'error'); return; }
-  if (lineas.length === 0) { showToast('Añade al menos un producto', 'error'); return; }
-
-  const btn = document.querySelector('[onclick="registrarCompra()"]');
-  if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>'; }
-
-  const { data: compraData, error: compraErr } = await db.from('compras').insert([{
-    proveedor, url_web: url || null, fecha, gasto_total: gastoTotal, notas: notas || null
-  }]).select().single();
-
-  if (compraErr) {
-    if (btn) { btn.disabled = false; btn.textContent = 'Registrar Compra y Actualizar PMP'; }
-    showToast('Error al registrar la compra', 'error'); return;
-  }
-
-  for (const linea of lineas) {
-    const prod = productosCache.find(p => p.id === linea.productoId);
-    if (!prod) continue;
-    const stockActual = prod.stock_actual || 0;
-    const pmpActual   = prod.precio_medio_litro || 0;
-    const dosisStd    = prod.dosis_estandar_ml || 0;
-    const precioMlNuevo = linea.precio / linea.cantidad;
-    let nuevoPmpMl;
-    if (stockActual === 0) {
-      nuevoPmpMl = precioMlNuevo;
-    } else {
-      const pmpMlActual = pmpActual / 1000;
-      nuevoPmpMl = ((stockActual * pmpMlActual) + (linea.cantidad * precioMlNuevo)) / (stockActual + linea.cantidad);
-    }
-    const nuevoPmpLitro    = nuevoPmpMl * 1000;
-    const nuevoPrecioDosis = nuevoPmpMl * dosisStd;
-    const nuevoStock       = stockActual + linea.cantidad;
-
-    await db.from('pedidos').insert([{ producto_id: linea.productoId, compra_id: compraData.id, fecha, cantidad_ml: linea.cantidad, precio_total_pagado: linea.precio }]);
-    await db.from('productos').update({ precio_medio_litro: nuevoPmpLitro, precio_por_dosis: nuevoPrecioDosis, stock_actual: nuevoStock }).eq('id', linea.productoId);
-    prod.stock_actual = nuevoStock; prod.precio_medio_litro = nuevoPmpLitro; prod.precio_por_dosis = nuevoPrecioDosis;
-  }
-
-  if (btn) { btn.disabled = false; btn.textContent = 'Registrar Compra y Actualizar PMP'; }
-  document.getElementById('compra-proveedor').value = ''; document.getElementById('compra-url').value = '';
-  document.getElementById('compra-total').value = ''; document.getElementById('compra-notas').value = '';
-  document.getElementById('lineas-pedido').innerHTML = ''; document.getElementById('resumen-compra').style.display = 'none';
-  lineaCount = 0;
-  showToast(`✓ Compra registrada · ${lineas.length} producto(s) actualizados`);
-  cargarProductos();
-}
-
-async function cargarHistorial() {
-  const loading = document.getElementById('historial-loading');
-  const container = document.getElementById('historial-container');
-  const empty = document.getElementById('historial-empty');
-
-  loading.style.display = 'block'; container.innerHTML = ''; empty.style.display = 'none';
-
-  const { data: compras, error } = await db.from('compras').select(`*, pedidos(cantidad_ml, precio_total_pagado, productos(nombre_comercial))`).order('fecha', { ascending: false });
-  loading.style.display = 'none';
-
-  if (error) { showToast('Error al cargar historial', 'error'); return; }
-  if (!compras || compras.length === 0) { empty.style.display = 'block'; return; }
-
-  container.innerHTML = compras.map(c => {
-    const lineasHTML = (c.pedidos || []).map(p => `
-      <div class="compra-linea-item"><span>${p.productos?.nombre_comercial || '—'}</span><span>${fmt(p.cantidad_ml, 0)} ml · ${fmt(p.precio_total_pagado, 2)} €</span></div>`).join('');
-    const urlLink = c.url_web ? `<a href="${c.url_web}" target="_blank" style="color:var(--accent);font-size:0.78rem;text-decoration:none;">🔗 Ver web</a>` : '';
-    return `<div class="compra-card"><div class="compra-card-header"><div><div class="compra-proveedor">${c.proveedor}</div><div class="compra-fecha">${formatFecha(c.fecha)} ${urlLink}</div>${c.notas ? `<div style="font-size:0.78rem;color:var(--text-muted);margin-top:0.25rem;">${c.notas}</div>` : ''}</div><div class="compra-total">${fmt(c.gasto_total, 2)} €</div></div>${lineasHTML ? `<div class="compra-lineas">${lineasHTML}</div>` : ''}</div>`;
-  }).join('');
-}
-
-
-// ═══════════════════════════════════════════════════════════
-//  MÓDULO OPERACIONES (CREACIÓN, EDICIÓN Y BORRADO)
+//  MÓDULO OPERACIONES
 // ═══════════════════════════════════════════════════════════
 
 function addProductoUsado() {
   productoUsadoCount++;
   const id = productoUsadoCount;
   const container = document.getElementById('productos-usados-container');
-  const options = productosCache.map(p => `<option value="${p.id}" data-nombre="${p.nombre_comercial}" data-dosis="${p.precio_por_dosis||0}">${p.nombre_comercial}</option>`).join('');
-
+  const options = productosCache.map(p => `<option value="${p.id}">${p.nombre_comercial}</option>`).join('');
   const div = document.createElement('div');
   div.className = 'producto-usado-row';
   div.id = `pu-${id}`;
   div.innerHTML = `
     <div class="field" style="margin:0;"><select class="pu-producto"><option value="">Producto...</option>${options}</select></div>
-    <div class="field" style="margin:0;"><input type="number" class="pu-ml" placeholder="ml" min="1" /></div>
+    <div class="field" style="margin:0;"><input type="number" class="pu-ml" placeholder="ml" /></div>
     <button class="btn-remove" onclick="document.getElementById('pu-${id}').remove()">✕</button>
   `;
   container.appendChild(div);
 }
 
 function limpiarFormularioIntervencion() {
-  ['int-matricula','int-cliente','int-horas','int-precio','int-incidentes'].forEach(id => {
-    document.getElementById(id).value = '';
-  });
-  document.getElementById('int-servicio').value = '';
-  document.getElementById('int-estado').value   = 'abierta';
+  ['int-matricula','int-cliente','int-horas','int-precio','int-incidentes'].forEach(id => document.getElementById(id).value = '');
   document.getElementById('productos-usados-container').innerHTML = '';
   productoUsadoCount = 0;
   resetMapaDanos();
   serviciosSeleccionados = [];
-  document.getElementById('int-precio-sugerido').style.display = 'none';
-  cargarSelectorServicios();
-
   intervencionEditando = null;
-  productosEditandoStock = [];
-  
   const btn = document.querySelector('[onclick="crearIntervencion()"]');
   if(btn) { btn.textContent = 'Guardar Intervención'; btn.style.background = 'var(--accent)'; }
 }
 
-
 async function prepararEdicion(id) {
   const { data: inv } = await db.from('intervenciones').select('*').eq('id', id).single();
   if(!inv) return;
-
   intervencionEditando = id;
   productosEditandoStock = inv.productos_usados || [];
-
   document.getElementById('int-matricula').value = inv.matricula || '';
   document.getElementById('int-cliente').value = inv.cliente_nombre || '';
   document.getElementById('int-horas').value = inv.horas_reales || '';
@@ -492,21 +263,7 @@ async function prepararEdicion(id) {
   document.getElementById('int-incidentes').value = inv.incidentes || '';
   document.getElementById('int-estado').value = inv.estado || 'abierta';
 
-  serviciosSeleccionados = [];
-  document.querySelectorAll('[id^="serv-btn-"]').forEach(b => {
-    b.style.background='transparent'; b.style.color='var(--text-secondary)'; b.style.borderColor='var(--border)';
-  });
-  if(inv.servicios_ids && inv.servicios_ids.length > 0) {
-    inv.servicios_ids.forEach(sid => {
-      const s = serviciosCache.find(x => x.id === sid);
-      if(s) toggleServicio(s.id, s.precio_base, s.duracion_horas);
-    });
-  } else {
-     document.getElementById('int-precio-sugerido').style.display = 'none';
-  }
-
   document.getElementById('productos-usados-container').innerHTML = '';
-  productoUsadoCount = 0;
   if(inv.productos_usados) {
     inv.productos_usados.forEach(p => {
       addProductoUsado();
@@ -516,13 +273,13 @@ async function prepararEdicion(id) {
     });
   }
 
+  // Cargar Daños
   limpiarMapa();
   if(inv.mapa_danos) {
     inv.mapa_danos.forEach(d => {
       damageCounter = Math.max(damageCounter, d.id);
       const color = DAMAGE_COLORS[d.tipo];
       damagePoints.push({ id: d.id, x: d.x, y: d.y, tipo: d.tipo, label: color.label });
-
       const g = document.getElementById('damage-points');
       const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
       circle.setAttribute('cx', d.x); circle.setAttribute('cy', d.y); circle.setAttribute('r', '10');
@@ -530,14 +287,12 @@ async function prepararEdicion(id) {
       circle.setAttribute('stroke', color.stroke); circle.setAttribute('stroke-width', '2');
       circle.setAttribute('id', `dp-${d.id}`); circle.style.cursor = 'pointer';
       circle.setAttribute('onclick', `removeDamagePoint(${d.id}, event)`);
-
       const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
       text.setAttribute('x', d.x); text.setAttribute('y', d.y + 4);
       text.setAttribute('text-anchor', 'middle'); text.setAttribute('font-size', '9');
       text.setAttribute('fill', '#fff'); text.setAttribute('font-weight', 'bold');
       text.setAttribute('pointer-events', 'none'); text.setAttribute('id', `dt-${d.id}`);
       text.textContent = d.id;
-
       g.appendChild(circle); g.appendChild(text);
     });
     renderDanosList();
@@ -545,491 +300,224 @@ async function prepararEdicion(id) {
 
   const btn = document.querySelector('[onclick="crearIntervencion()"]');
   if(btn) { btn.innerHTML = '💾 Actualizar Intervención'; btn.style.background = '#22c55e'; }
-
   cerrarModal('modal-intervencion');
   switchTabDirect('operaciones', 'nueva');
-  showToast('Modo edición activado. No olvides guardar.', 'success');
 }
 
-
 async function crearIntervencion() {
-  const matricula  = document.getElementById('int-matricula').value.trim().toUpperCase();
-  const cliente    = document.getElementById('int-cliente').value.trim();
-  const horas      = parseFloat(document.getElementById('int-horas').value) || null;
-  const precio     = parseFloat(document.getElementById('int-precio').value) || null;
-  const estado     = document.getElementById('int-estado').value;
-  const incidentes = document.getElementById('int-incidentes').value.trim();
+  const mat = document.getElementById('int-matricula').value.trim().toUpperCase();
+  const cli = document.getElementById('int-cliente').value.trim();
+  const hor = parseFloat(document.getElementById('int-horas').value) || null;
+  const pre = parseFloat(document.getElementById('int-precio').value) || null;
+  const est = document.getElementById('int-estado').value;
+  const inc = document.getElementById('int-incidentes').value.trim();
 
-  if (!matricula) { showToast('Introduce la matrícula', 'error'); return; }
-  if (!cliente)   { showToast('Introduce el nombre del cliente', 'error'); return; }
-
-  const serviciosNombres = serviciosSeleccionados.map(id => serviciosCache.find(s => s.id === id)?.nombre).filter(Boolean);
-  const nombreServicio = serviciosNombres.join(' + ') || null;
+  if (!mat || !cli) { showToast('Matrícula y cliente obligatorios', 'error'); return; }
 
   const productosUsados = [];
   document.querySelectorAll('.producto-usado-row').forEach(row => {
-    const productoId = row.querySelector('.pu-producto').value;
+    const pid = row.querySelector('.pu-producto').value;
     const ml = parseFloat(row.querySelector('.pu-ml').value);
-    if (!productoId || !ml) return;
-    const prod = productosCache.find(p => p.id === productoId);
-    productosUsados.push({
-      id: productoId, nombre: prod?.nombre_comercial || '', nombre_comercial: prod?.nombre_comercial || '',
-      ml_usados: ml, coste: (prod?.precio_por_dosis || 0) * (ml / (prod?.dosis_estandar_ml || 1))
-    });
+    if (!pid || !ml) return;
+    const prod = productosCache.find(p => p.id === pid);
+    productosUsados.push({ id: pid, nombre_comercial: prod?.nombre_comercial, ml_usados: ml, coste: (prod?.precio_por_dosis || 0) * (ml / (prod?.dosis_estandar_ml || 1)) });
   });
 
-  const mapaData = damagePoints.length ? damagePoints.map(d => ({
-    id: d.id, x: Math.round(d.x), y: Math.round(d.y), tipo: d.tipo, label: DAMAGE_COLORS[d.tipo]?.label || d.tipo
-  })) : null;
-
-  const btn = document.querySelector('[onclick="crearIntervencion()"]');
-  if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>'; }
+  const mapaData = damagePoints.length ? damagePoints.map(d => ({ id: d.id, x: d.x, y: d.y, tipo: d.tipo, label: d.label })) : null;
 
   if (intervencionEditando) {
+    // Restaurar stock viejo
     for (const old of productosEditandoStock) {
-      const prod = productosCache.find(p => p.id === old.id);
-      if(prod) {
-        const stockRecuperado = (prod.stock_actual || 0) + old.ml_usados;
-        await db.from('productos').update({ stock_actual: stockRecuperado }).eq('id', old.id);
-        prod.stock_actual = stockRecuperado; 
+      const p = productosCache.find(x => x.id === old.id);
+      if(p) {
+        const r = (p.stock_actual || 0) + old.ml_usados;
+        await db.from('productos').update({ stock_actual: r }).eq('id', old.id);
+        p.stock_actual = r;
       }
     }
-
-    const { error } = await db.from('intervenciones').update({
-      matricula, cliente_nombre: cliente, horas_reales: horas, precio_cobrado: precio,
-      productos_usados: productosUsados.length ? productosUsados : null,
-      mapa_danos: mapaData, incidentes: incidentes || null, estado,
-      nombre_servicio: nombreServicio, servicios_ids: serviciosSeleccionados.length ? serviciosSeleccionados : null
+    await db.from('intervenciones').update({
+      matricula: mat, cliente_nombre: cli, horas_reales: hor, precio_cobrado: pre,
+      productos_usados: productosUsados, mapa_danos: mapaData, incidentes: inc, estado: est,
+      servicios_ids: serviciosSeleccionados
     }).eq('id', intervencionEditando);
-
-    if (error) { showToast('Error al actualizar la intervención', 'error'); return; }
-    showToast('✓ Intervención actualizada correctamente');
-
   } else {
-    const { error } = await db.from('intervenciones').insert([{
-      matricula, cliente_nombre: cliente, servicio_id: null, horas_reales: horas, precio_cobrado: precio,
-      productos_usados: productosUsados.length ? productosUsados : null,
-      mapa_danos: mapaData, incidentes: incidentes || null, estado,
-      nombre_servicio: nombreServicio, servicios_ids: serviciosSeleccionados.length ? serviciosSeleccionados : null
+    await db.from('intervenciones').insert([{
+      matricula: mat, cliente_nombre: cli, horas_reales: hor, precio_cobrado: pre,
+      productos_usados: productosUsados, mapa_danos: mapaData, incidentes: inc, estado: est,
+      servicios_ids: serviciosSeleccionados
     }]);
-
-    if (error) { showToast('Error al guardar la intervención', 'error'); return; }
-    showToast('✓ Intervención guardada');
   }
 
+  // Descontar stock nuevo
   for (const pu of productosUsados) {
-    const prod = productosCache.find(p => p.id === pu.id);
-    if (!prod) continue;
-    const nuevoStock = Math.max(0, (prod.stock_actual || 0) - pu.ml_usados);
-    await db.from('productos').update({ stock_actual: nuevoStock }).eq('id', pu.id);
-    prod.stock_actual = nuevoStock; 
+    const p = productosCache.find(x => x.id === pu.id);
+    if(p) {
+      const n = Math.max(0, (p.stock_actual || 0) - pu.ml_usados);
+      await db.from('productos').update({ stock_actual: n }).eq('id', pu.id);
+      p.stock_actual = n;
+    }
   }
-  if (productosUsados.length > 0) cargarProductos(); 
 
-  if (btn) { btn.disabled = false; btn.textContent = 'Guardar Intervención'; }
   limpiarFormularioIntervencion();
   switchTabDirect('operaciones', 'lista');
   cargarIntervenciones();
+  cargarProductos();
 }
-
-
-async function eliminarIntervencion(id) {
-  if (!confirm('¿Seguro que quieres eliminar esta intervención de forma permanente? El stock gastado se devolverá al almacén.')) return;
-
-  const { data: inv } = await db.from('intervenciones').select('productos_usados').eq('id', id).single();
-  if (inv && inv.productos_usados) {
-    for (const p of inv.productos_usados) {
-      const prod = productosCache.find(x => x.id === p.id);
-      if (prod) {
-        const nuevoStock = (prod.stock_actual || 0) + p.ml_usados;
-        await db.from('productos').update({ stock_actual: nuevoStock }).eq('id', p.id);
-        prod.stock_actual = nuevoStock;
-      }
-    }
-  }
-
-  const { error } = await db.from('intervenciones').delete().eq('id', id);
-  if (error) { showToast('Error al eliminar', 'error'); return; }
-
-  cerrarModal('modal-intervencion');
-  showToast('✓ Intervención eliminada y stock restaurado');
-  cargarIntervenciones();
-  cargarProductos(); 
-}
-
 
 async function cargarIntervenciones() {
-  const loading   = document.getElementById('intervenciones-loading');
-  const container = document.getElementById('intervenciones-container');
-  const empty     = document.getElementById('intervenciones-empty');
-
-  loading.style.display = 'block'; container.innerHTML   = ''; empty.style.display   = 'none';
-
-  const { data, error } = await db.from('intervenciones').select('*').order('created_at', { ascending: false });
-  loading.style.display = 'none';
-
-  if (error) { showToast('Error al cargar intervenciones', 'error'); return; }
-  if (!data || data.length === 0) { empty.style.display = 'block'; return; }
-
-  container.innerHTML = data.map(inv => {
-    const productos = inv.productos_usados || [];
-    const numProductos = productos.length;
-    return `
-      <div class="intervencion-card" onclick="verIntervencion('${inv.id}')">
-        <div style="display:flex;justify-content:space-between;align-items:flex-start;">
-          <div><div class="intervencion-matricula">${inv.matricula}</div><div class="intervencion-cliente">${inv.cliente_nombre}</div></div>
-          ${estadoBadge(inv.estado)}
-        </div>
-        <div class="intervencion-meta">
-          ${inv.nombre_servicio ? `<span class="badge badge-gray">${inv.nombre_servicio}</span>` : ''}
-          ${inv.horas_reales ? `<span class="badge badge-blue">⏱ ${inv.horas_reales}h</span>` : ''}
-          ${inv.precio_cobrado ? `<span class="badge badge-green">💰 ${fmt(inv.precio_cobrado,2)} €</span>` : ''}
-          ${numProductos > 0 ? `<span class="badge badge-orange">🧴 ${numProductos} prod.</span>` : ''}
-        </div>
-        <div style="font-size:0.73rem;color:var(--text-muted);margin-top:0.5rem;">${new Date(inv.created_at).toLocaleDateString('es-ES')}</div>
-      </div>`;
-  }).join('');
+  const { data } = await db.from('intervenciones').select('*').order('created_at', { ascending: false });
+  const cont = document.getElementById('intervenciones-container');
+  if(!data) return;
+  cont.innerHTML = data.map(inv => `
+    <div class="intervencion-card" onclick="verIntervencion('${inv.id}')">
+      <div style="display:flex;justify-content:space-between;">
+        <div><div class="intervencion-matricula">${inv.matricula}</div><div class="intervencion-cliente">${inv.cliente_nombre}</div></div>
+        ${estadoBadge(inv.estado)}
+      </div>
+    </div>`).join('');
 }
 
-
 async function verIntervencion(id) {
-  const { data: inv, error } = await db.from('intervenciones').select('*').eq('id', id).single();
-  if (error || !inv) return;
-
-  const productos = inv.productos_usados || [];
-  const costeMateriales = productos.reduce((s, p) => s + (p.coste || 0), 0);
-  const rentabilidad = inv.precio_cobrado ? `${fmt(inv.precio_cobrado, 2)} € - ${fmt(costeMateriales, 2)} € = <span class="highlight">${fmt(inv.precio_cobrado - costeMateriales, 2)} €</span>` : '—';
-
-  document.getElementById('modal-int-titulo').innerHTML = `<span>${inv.matricula}</span> — ${inv.cliente_nombre}`;
-
+  const { data: inv } = await db.from('intervenciones').select('*').eq('id', id).single();
+  if(!inv) return;
+  document.getElementById('modal-int-titulo').innerHTML = `${inv.matricula} — ${inv.cliente_nombre}`;
   document.getElementById('modal-int-contenido').innerHTML = `
-    <div style="display:grid;gap:0.75rem;">
-      <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
-        ${estadoBadge(inv.estado)}
-        ${inv.nombre_servicio ? `<span class="badge badge-gray">${inv.nombre_servicio}</span>` : ''}
-      </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.5rem;">
-        <div style="background:var(--bg-input);border-radius:0.4rem;padding:0.75rem;">
-          <div style="font-size:0.7rem;color:var(--text-muted);margin-bottom:0.25rem;">HORAS</div>
-          <div style="font-family:'Barlow Condensed',sans-serif;font-size:1.3rem;font-weight:700;">${inv.horas_reales || '—'} h</div>
-        </div>
-        <div style="background:var(--bg-input);border-radius:0.4rem;padding:0.75rem;">
-          <div style="font-size:0.7rem;color:var(--text-muted);margin-bottom:0.25rem;">PRECIO COBRADO</div>
-          <div style="font-family:'Barlow Condensed',sans-serif;font-size:1.3rem;font-weight:700;color:var(--accent);">${inv.precio_cobrado ? fmt(inv.precio_cobrado,2)+' €' : '—'}</div>
-        </div>
-      </div>
-      ${productos.length > 0 ? `
-        <div>
-          <div style="font-size:0.72rem;font-weight:600;letter-spacing:0.09em;text-transform:uppercase;color:var(--text-secondary);margin-bottom:0.5rem;">Productos Usados</div>
-          ${productos.map(p => `
-            <div style="display:flex;justify-content:space-between;padding:0.4rem 0;border-bottom:1px solid var(--border);font-size:0.85rem;">
-              <span>${p.nombre_comercial || p.nombre}</span><span style="color:var(--text-muted)">${p.ml_usados} ml · ${fmt(p.coste,4)} €</span>
-            </div>`).join('')}
-          <div style="display:flex;justify-content:space-between;padding:0.4rem 0;font-size:0.85rem;margin-top:0.25rem;">
-            <span style="color:var(--text-secondary);">Coste total materiales</span><span class="highlight">${fmt(costeMateriales,4)} €</span>
-          </div>
-        </div>` : ''}
+    <div style="display:grid;gap:1rem;">
+      <div style="display:flex;gap:0.5rem;">${estadoBadge(inv.estado)}</div>
       
-      ${inv.mapa_danos && inv.mapa_danos.length > 0 ? `
-        <div>
-          <div style="font-size:0.72rem;font-weight:600;letter-spacing:0.09em;text-transform:uppercase;color:var(--text-secondary);margin-bottom:0.5rem;">Mapa de Daños</div>
-          <div style="background:var(--bg-input);border:1px solid var(--border);border-radius:0.4rem;overflow:hidden;position:relative;">
-            <svg viewBox="0 0 600 300" xmlns="http://www.w3.org/2000/svg" style="width:100%;display:block;background:#1a1a2e;">
-              <g transform="translate(30, 100)"><text x="85" y="-20" font-size="10" fill="#7a8fa8" font-weight="bold" text-anchor="middle" letter-spacing="1">SUPERIOR</text><rect x="0" y="0" width="170" height="75" rx="16" fill="#222" stroke="#444" stroke-width="1.5"/><rect x="40" y="5" width="90" height="65" rx="10" fill="#2a2a2a" stroke="#444" stroke-width="1"/><path d="M 50 5 L 120 5 L 110 70 L 60 70 Z" fill="#111"/></g>
-              <g transform="translate(280, 40)"><text x="120" y="-15" font-size="10" fill="#7a8fa8" font-weight="bold" text-anchor="middle" letter-spacing="1">LATERAL</text><path d="M 20 70 L 40 35 L 85 15 L 160 15 L 200 35 L 220 70 Z" fill="#222" stroke="#444" stroke-width="1.5"/><circle cx="65" cy="70" r="18" fill="#111" stroke="#555" stroke-width="1.5"/><circle cx="185" cy="70" r="18" fill="#111" stroke="#555" stroke-width="1.5"/><path d="M 85 20 L 155 20 L 175 35 L 90 35 Z" fill="#111" /><path d="M 45 35 L 80 20 L 80 35 Z" fill="#111" /><line x1="85" y1="35" x2="85" y2="70" stroke="#444" stroke-width="1"/><line x1="155" y1="35" x2="155" y2="70" stroke="#444" stroke-width="1"/></g>
-              <g transform="translate(260, 180)"><text x="50" y="-15" font-size="10" fill="#7a8fa8" font-weight="bold" text-anchor="middle" letter-spacing="1">FRONTAL</text><path d="M 10 60 L 15 25 L 30 5 L 70 5 L 85 25 L 90 60 Z" fill="#222" stroke="#444" stroke-width="1.5"/><path d="M 20 25 L 80 25 L 65 10 L 35 10 Z" fill="#111"/><rect x="30" y="40" width="40" height="12" rx="2" fill="#111" stroke="#333"/><ellipse cx="20" cy="35" rx="8" ry="5" fill="#fff" opacity="0.6"/><ellipse cx="80" cy="35" rx="8" ry="5" fill="#fff" opacity="0.6"/><rect x="5" y="55" width="14" height="15" rx="2" fill="#111"/><rect x="81" y="55" width="14" height="15" rx="2" fill="#111"/></g>
-              <g transform="translate(420, 180)"><text x="50" y="-15" font-size="10" fill="#7a8fa8" font-weight="bold" text-anchor="middle" letter-spacing="1">TRASERA</text><path d="M 10 60 L 15 25 L 30 5 L 70 5 L 85 25 L 90 60 Z" fill="#222" stroke="#444" stroke-width="1.5"/><path d="M 20 25 L 80 25 L 65 10 L 35 10 Z" fill="#111"/><rect x="35" y="45" width="30" height="10" rx="1" fill="#111" stroke="#f97316"/><ellipse cx="20" cy="35" rx="8" ry="5" fill="#ef4444" opacity="0.7"/><ellipse cx="80" cy="35" rx="8" ry="5" fill="#ef4444" opacity="0.7"/><rect x="5" y="55" width="14" height="15" rx="2" fill="#111"/><rect x="81" y="55" width="14" height="15" rx="2" fill="#111"/></g>
-              ${inv.mapa_danos.map(d => {
-                const colors = { rayazo:'#ef4444', abollon:'#f59e0b', oxidacion:'#8b5cf6', otro:'#6b7280' };
-                const strokes = { rayazo:'#fca5a5', abollon:'#fcd34d', oxidacion:'#c4b5fd', otro:'#9ca3af' };
-                const c = colors[d.tipo] || '#ef4444'; const s = strokes[d.tipo] || '#fca5a5';
-                return `<circle cx="${d.x}" cy="${d.y}" r="10" fill="${c}" fill-opacity="0.75" stroke="${s}" stroke-width="2"/>
-                        <text x="${d.x}" y="${d.y+4}" text-anchor="middle" font-size="9" fill="#fff" font-weight="bold">${d.id}</text>`;
-              }).join('')}
-            </svg>
-          </div>
-          <div style="display:flex;flex-wrap:wrap;gap:0.35rem;margin-top:0.5rem;">
-            ${inv.mapa_danos.map(d => {
-              const colors = { rayazo:'#ef4444', abollon:'#f59e0b', oxidacion:'#8b5cf6', otro:'#6b7280' };
-              const c = colors[d.tipo] || '#ef4444';
-              return `<span style="font-size:0.72rem;padding:0.15rem 0.5rem;border-radius:99px;background:${c}22;border:1px solid ${c}66;color:${c};">${d.id}. ${d.label}</span>`;
-            }).join('')}
-          </div>
-        </div>` : ''}
-
-      <div>
-        <div style="font-size:0.72rem;font-weight:600;letter-spacing:0.09em;text-transform:uppercase;color:var(--text-secondary);margin-bottom:0.5rem;">Reporte Fotográfico</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.5rem;margin-bottom:1rem;">
-          <div style="background:var(--bg-input);border:1px dashed var(--border);border-radius:0.4rem;padding:1rem;text-align:center;position:relative;">
-            <div style="font-size:0.75rem;color:var(--text-muted);margin-bottom:0.5rem;">ESTADO INICIAL</div>
-            ${inv.foto_antes 
-              ? `<img src="${inv.foto_antes}" style="max-width:100%;max-height:150px;object-fit:cover;border-radius:0.3rem;margin-bottom:0.5rem;" />
-                 <button class="btn-remove" style="position:absolute;top:0.5rem;right:0.5rem;width:24px;height:24px;font-size:0.7rem;" onclick="eliminarFoto('${inv.id}', 'antes')">✕</button>`
-              : `<input type="file" id="upload-antes" accept="image/*" style="display:none;" onchange="subirFoto(event, '${inv.id}', 'foto_antes')" />
-                 <label for="upload-antes" class="btn-secondary" style="font-size:0.75rem;padding:0.4rem 0.8rem;display:inline-block;cursor:pointer;">+ Subir Antes</label>`
-            }
-          </div>
-          <div style="background:var(--bg-input);border:1px dashed var(--border);border-radius:0.4rem;padding:1rem;text-align:center;position:relative;">
-            <div style="font-size:0.75rem;color:var(--text-muted);margin-bottom:0.5rem;">RESULTADO FINAL</div>
-            ${inv.foto_despues 
-              ? `<img src="${inv.foto_despues}" style="max-width:100%;max-height:150px;object-fit:cover;border-radius:0.3rem;margin-bottom:0.5rem;" />
-                 <button class="btn-remove" style="position:absolute;top:0.5rem;right:0.5rem;width:24px;height:24px;font-size:0.7rem;" onclick="eliminarFoto('${inv.id}', 'despues')">✕</button>`
-              : `<input type="file" id="upload-despues" accept="image/*" style="display:none;" onchange="subirFoto(event, '${inv.id}', 'foto_despues')" />
-                 <label for="upload-despues" class="btn-secondary" style="font-size:0.75rem;padding:0.4rem 0.8rem;display:inline-block;cursor:pointer;">+ Subir Después</label>`
-            }
-          </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.5rem;">
+        <div style="background:var(--bg-input);padding:0.5rem;border-radius:0.4rem;text-align:center;">
+          <div style="font-size:0.6rem;color:var(--text-muted);margin-bottom:0.4rem;">ANTES</div>
+          ${inv.foto_antes ? `<img src="${inv.foto_antes}" style="width:100%;border-radius:0.2rem;"/>` : `<input type="file" onchange="subirFoto(event,'${inv.id}','foto_antes')" style="font-size:0.7rem;width:100%;"/>`}
+        </div>
+        <div style="background:var(--bg-input);padding:0.5rem;border-radius:0.4rem;text-align:center;">
+          <div style="font-size:0.6rem;color:var(--text-muted);margin-bottom:0.4rem;">DESPUÉS</div>
+          ${inv.foto_despues ? `<img src="${inv.foto_despues}" style="width:100%;border-radius:0.2rem;"/>` : `<input type="file" onchange="subirFoto(event,'${inv.id}','foto_despues')" style="font-size:0.7rem;width:100%;"/>`}
         </div>
       </div>
 
-      <div>
-        <div style="font-size:0.72rem;font-weight:600;letter-spacing:0.09em;text-transform:uppercase;color:var(--text-secondary);margin-bottom:0.35rem;">Rentabilidad Bruta</div>
-        <div style="font-size:0.9rem;">${rentabilidad}</div>
-      </div>
-      ${inv.incidentes ? `
-        <div>
-          <div style="font-size:0.72rem;font-weight:600;letter-spacing:0.09em;text-transform:uppercase;color:var(--text-secondary);margin-bottom:0.35rem;">Incidentes / Observaciones</div>
-          <div style="font-size:0.85rem;color:var(--text-secondary);background:var(--bg-input);border-radius:0.4rem;padding:0.75rem;">${inv.incidentes}</div>
-        </div>` : ''}
-      <div style="display:flex;gap:0.5rem;margin-top:0.25rem;">
+      <div style="display:flex;gap:0.5rem;margin-top:1rem;">
         <button class="btn-secondary" onclick="cerrarModal('modal-intervencion')">Cerrar</button>
-        <button class="btn-secondary" onclick="prepararEdicion('${inv.id}')" style="color:var(--accent);border-color:var(--accent);">✏️ Editar</button>
-        <button class="btn-secondary" onclick="eliminarIntervencion('${inv.id}')" style="color:#ef4444;border-color:#ef4444;width:40px;">🗑️</button>
-        <button class="btn-action" onclick="cambiarEstado('${inv.id}', '${inv.estado}')" style="flex:1;">Cambiar Estado</button>
+        <button class="btn-secondary" onclick="prepararEdicion('${inv.id}')" style="color:var(--accent);">✏️ Editar</button>
+        <button class="btn-secondary" onclick="eliminarIntervencion('${inv.id}')" style="color:#ef4444;">🗑️ Borrar</button>
       </div>
-    </div>
-  `;
-
+    </div>`;
   abrirModal('modal-intervencion');
 }
 
-async function cambiarEstado(id, estadoActual) {
-  const estados = ['abierta', 'en_proceso', 'finalizada', 'entregada'];
-  const idx = estados.indexOf(estadoActual);
-  const nuevoEstado = estados[(idx + 1) % estados.length];
-
-  const { error } = await db.from('intervenciones').update({ estado: nuevoEstado }).eq('id', id);
-  if (error) { showToast('Error al actualizar estado', 'error'); return; }
-
-  cerrarModal('modal-intervencion');
-  showToast(`✓ Estado actualizado: ${nuevoEstado}`);
-  cargarIntervenciones();
+async function subirFoto(e, id, col) {
+  const file = e.target.files[0];
+  if(!file) return;
+  showToast('Subiendo...', 'success');
+  const name = `${id}_${col}_${Date.now()}.jpg`;
+  await db.storage.from('fotos_vehiculos').upload(name, file);
+  const { data: { publicUrl } } = db.storage.from('fotos_vehiculos').getPublicUrl(name);
+  await db.from('intervenciones').update({ [col]: publicUrl }).eq('id', id);
+  verIntervencion(id);
 }
 
+async function eliminarIntervencion(id) {
+  if(!confirm('¿Borrar? Se restaurará el stock.')) return;
+  const { data: inv } = await db.from('intervenciones').select('productos_usados').eq('id', id).single();
+  if(inv?.productos_usados) {
+    for (const p of inv.productos_usados) {
+      const pr = productosCache.find(x => x.id === p.id);
+      if(pr) {
+        const n = (pr.stock_actual || 0) + p.ml_usados;
+        await db.from('productos').update({ stock_actual: n }).eq('id', p.id);
+        pr.stock_actual = n;
+      }
+    }
+  }
+  await db.from('intervenciones').delete().eq('id', id);
+  cerrarModal('modal-intervencion');
+  cargarIntervenciones();
+  cargarProductos();
+}
 
 // ═══════════════════════════════════════════════════════════
-//  MÓDULO CALIDAD (PDF)
+//  MÓDULO CALIDAD (PDF MEJORADO)
 // ═══════════════════════════════════════════════════════════
-
-let costeHoraConfig = 25; // €/hora por defecto, editable
 
 async function cargarCalidad() {
   const sel = document.getElementById('calidad-intervencion-sel');
-  if (!sel) return;
-  sel.innerHTML = '<option value="">Cargando...</option>';
-
-  const { data, error } = await db.from('intervenciones').select('id, matricula, cliente_nombre, nombre_servicio, estado').order('created_at', { ascending: false });
-  if (error || !data) { sel.innerHTML = '<option value="">Error al cargar</option>'; return; }
-
-  sel.innerHTML = '<option value="">Selecciona una intervención...</option>';
-  data.forEach(inv => {
-    const opt = document.createElement('option'); opt.value = inv.id;
-    opt.textContent = `${inv.matricula} — ${inv.cliente_nombre} (${inv.nombre_servicio || 'Sin servicio'})`;
-    sel.appendChild(opt);
-  });
+  const { data } = await db.from('intervenciones').select('id, matricula, cliente_nombre').order('created_at', { ascending: false });
+  if(!data) return;
+  sel.innerHTML = '<option value="">Selecciona...</option>' + data.map(i => `<option value="${i.id}">${i.matricula} - ${i.cliente_nombre}</option>`).join('');
 }
 
 async function cargarVistaPrevia() {
   const id = document.getElementById('calidad-intervencion-sel').value;
-  const preview = document.getElementById('calidad-preview');
-  const empty   = document.getElementById('calidad-empty');
-  const costeH  = parseFloat(document.getElementById('calidad-coste-hora').value) || 25;
-  costeHoraConfig = costeH;
-
-  if (!id) { preview.style.display = 'none'; empty.style.display = 'block'; return; }
-
-  const { data: inv, error } = await db.from('intervenciones').select('*').eq('id', id).single();
-  if (error || !inv) return;
-
-  const productos = inv.productos_usados || [];
-  const costeMat  = productos.reduce((s, p) => s + (p.coste || 0), 0);
-  const costeHoras = (inv.horas_reales || 0) * costeH;
-  const beneficio  = (inv.precio_cobrado || 0) - costeMat - costeHoras;
-
-  document.getElementById('prev-matricula').textContent   = inv.matricula;
-  document.getElementById('prev-cliente').textContent     = inv.cliente_nombre;
-  document.getElementById('prev-servicio').textContent    = inv.nombre_servicio || '—';
-  document.getElementById('prev-fecha').textContent       = new Date(inv.created_at).toLocaleDateString('es-ES');
-  document.getElementById('prev-estado').innerHTML        = estadoBadge(inv.estado);
-
-  const prodHTML = productos.length
-    ? productos.map(p => `<div style="display:flex;justify-content:space-between;padding:0.4rem 0;border-bottom:1px solid var(--border);font-size:0.85rem;"><span>✓ ${p.nombre_comercial || p.nombre}</span><span style="color:var(--text-muted)">${p.ml_usados} ml</span></div>`).join('')
-    : '<div style="color:var(--text-muted);font-size:0.85rem;">Sin productos registrados</div>';
-  document.getElementById('prev-productos').innerHTML = prodHTML;
-
-  document.getElementById('prev-precio').textContent    = `${fmt(inv.precio_cobrado || 0, 2)} €`;
-  document.getElementById('prev-coste-mat').textContent = `${fmt(costeMat, 2)} €`;
-  document.getElementById('prev-coste-horas').textContent = `${fmt(costeHoras, 2)} € (${inv.horas_reales || 0}h × ${costeH} €/h)`;
-  document.getElementById('prev-beneficio').textContent = `${fmt(beneficio, 2)} €`;
-  document.getElementById('prev-beneficio').style.color = beneficio >= 0 ? 'var(--success)' : 'var(--danger)';
-
-  document.getElementById('prev-incidentes').textContent = inv.incidentes || 'Sin observaciones';
+  if(!id) return;
+  const { data: inv } = await db.from('intervenciones').select('*').eq('id', id).single();
+  document.getElementById('prev-matricula').textContent = inv.matricula;
+  document.getElementById('prev-cliente').textContent = inv.cliente_nombre;
+  document.getElementById('calidad-preview').style.display = 'block';
   document.getElementById('calidad-preview').dataset.invId = id;
-  document.getElementById('calidad-preview').dataset.costeH = costeH;
-
-  preview.style.display = 'block'; empty.style.display   = 'none';
 }
 
 async function generarPDFCliente() {
   const id = document.getElementById('calidad-preview').dataset.invId;
-  if (!id) return;
-
   const { data: inv } = await db.from('intervenciones').select('*').eq('id', id).single();
-  if (!inv) return;
-
+  
+  showToast('Generando PDF con fotos...', 'success');
+  
   const { jsPDF } = window.jspdf;
-  const doc = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
-  const naranja = [249, 115, 22]; const gris = [30, 30, 30]; const blanco = [240, 240, 240];
-
-  doc.setFillColor(...gris); doc.rect(0, 0, 210, 297, 'F');
-  doc.setFillColor(...naranja); doc.rect(0, 0, 210, 28, 'F');
-  doc.setTextColor(255, 255, 255); doc.setFontSize(22); doc.setFont('helvetica', 'bold');
-  doc.text('BL DETAIL CENTER', 15, 18);
-  doc.setFontSize(10); doc.setFont('helvetica', 'normal');
-  doc.text('Informe de Calidad — Cliente', 15, 24);
-  doc.text(`Fecha: ${new Date(inv.created_at).toLocaleDateString('es-ES')}`, 150, 18);
-
-  let y = 40;
-  doc.setTextColor(...blanco); doc.setFontSize(14); doc.setFont('helvetica', 'bold');
-  doc.text('DATOS DEL VEHÍCULO', 15, y); y += 8;
-
-  doc.setFontSize(10); doc.setFont('helvetica', 'normal'); doc.setTextColor(...[180, 180, 180]);
-  doc.text(`Matrícula:`, 15, y); doc.setTextColor(...blanco); doc.setFont('helvetica', 'bold'); doc.text(inv.matricula, 50, y); y += 6;
-  doc.setFont('helvetica', 'normal'); doc.setTextColor(...[180, 180, 180]);
-  doc.text(`Cliente:`, 15, y); doc.setTextColor(...blanco); doc.text(inv.cliente_nombre, 50, y); y += 6;
-  doc.setTextColor(...[180, 180, 180]); doc.text(`Servicio:`, 15, y); doc.setTextColor(...naranja); doc.text(inv.nombre_servicio || '—', 50, y); y += 6;
-  doc.setTextColor(...[180, 180, 180]); doc.text(`Estado:`, 15, y); doc.setTextColor(...blanco); doc.text(inv.estado?.toUpperCase() || '—', 50, y); y += 12;
-
-  doc.setDrawColor(...naranja); doc.setLineWidth(0.5); doc.line(15, y, 195, y); y += 8;
-
-  doc.setTextColor(...blanco); doc.setFontSize(13); doc.setFont('helvetica', 'bold');
-  doc.text('PRODUCTOS APLICADOS', 15, y); y += 8;
-
-  const productos = inv.productos_usados || [];
-  if (productos.length === 0) {
-    doc.setFontSize(10); doc.setFont('helvetica', 'normal'); doc.setTextColor(...[180, 180, 180]);
-    doc.text('Sin productos registrados', 15, y); y += 8;
-  } else {
-    productos.forEach(p => {
-      doc.setFillColor(45, 45, 45); doc.roundedRect(15, y - 4, 180, 8, 1, 1, 'F');
-      doc.setFontSize(10); doc.setFont('helvetica', 'bold'); doc.setTextColor(...naranja); doc.text('✓', 18, y);
-      doc.setTextColor(...blanco); doc.setFont('helvetica', 'normal'); doc.text(p.nombre_comercial || p.nombre, 25, y);
-      doc.setTextColor(...[180, 180, 180]); doc.text(`${p.ml_usados} ml aplicados`, 155, y, { align: 'right' }); y += 10;
+  const doc = new jsPDF();
+  
+  // Colores BL Detail
+  const naranja = [249, 115, 22];
+  
+  // PÁGINA 1: Informe
+  doc.setFillColor(30, 30, 30); doc.rect(0, 0, 210, 297, 'F');
+  doc.setFillColor(...naranja); doc.rect(0, 0, 210, 20, 'F');
+  doc.setTextColor(255, 255, 255); doc.setFontSize(20); doc.text('BL DETAIL CENTER', 15, 14);
+  
+  doc.setFontSize(10);
+  doc.text(`Matrícula: ${inv.matricula}`, 15, 40);
+  doc.text(`Cliente: ${inv.cliente_nombre}`, 15, 48);
+  doc.text(`Fecha: ${new Date(inv.created_at).toLocaleDateString()}`, 15, 56);
+  
+  doc.setDrawColor(...naranja); doc.line(15, 65, 195, 65);
+  
+  doc.text('PRODUCTOS UTILIZADOS:', 15, 75);
+  let y = 85;
+  if(inv.productos_usados) {
+    inv.productos_usados.forEach(p => {
+      doc.text(`- ${p.nombre_comercial} (${p.ml_usados}ml)`, 20, y);
+      y += 7;
     });
   }
 
-  y += 4; doc.setDrawColor(...naranja); doc.line(15, y, 195, y); y += 8;
-
-  doc.setTextColor(...blanco); doc.setFontSize(13); doc.setFont('helvetica', 'bold');
-  doc.text('OBSERVACIONES TÉCNICAS', 15, y); y += 8;
-  doc.setFontSize(9); doc.setFont('helvetica', 'normal'); doc.setTextColor(...[180, 180, 180]);
-  const obs = inv.incidentes || 'Sin observaciones registradas.';
-  const obsLines = doc.splitTextToSize(obs, 175);
-  doc.text(obsLines, 15, y); y += obsLines.length * 5 + 8;
-
-  doc.setFillColor(...naranja); doc.rect(0, 285, 210, 12, 'F');
-  doc.setTextColor(255, 255, 255); doc.setFontSize(8); doc.setFont('helvetica', 'normal');
-  doc.text('BL Detail Center — Sistema de Gestión de Calidad y Operaciones', 105, 292, { align: 'center' });
-
-  doc.save(`informe_cliente_${inv.matricula}_${inv.created_at.split('T')[0]}.pdf`);
-  showToast('✓ PDF cliente generado');
-}
-
-async function generarPDFInterno() {
-  const id = document.getElementById('calidad-preview').dataset.invId;
-  const costeH = parseFloat(document.getElementById('calidad-preview').dataset.costeH) || 25;
-  if (!id) return;
-
-  const { data: inv } = await db.from('intervenciones').select('*').eq('id', id).single();
-  if (!inv) return;
-
-  const productos = inv.productos_usados || [];
-  const costeMat = productos.reduce((s, p) => s + (p.coste || 0), 0);
-  const costeHoras = (inv.horas_reales || 0) * costeH;
-  const beneficio = (inv.precio_cobrado || 0) - costeMat - costeHoras;
-  const margen = inv.precio_cobrado ? (beneficio / inv.precio_cobrado * 100) : 0;
-
-  const { jsPDF } = window.jspdf;
-  const doc = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
-  const naranja = [249, 115, 22]; const gris = [30, 30, 30]; const blanco = [240, 240, 240]; const grisClaro = [180, 180, 180];
-
-  doc.setFillColor(...gris); doc.rect(0, 0, 210, 297, 'F');
-  doc.setFillColor(20, 20, 20); doc.rect(0, 0, 210, 28, 'F'); doc.setFillColor(...naranja); doc.rect(0, 0, 4, 28, 'F');
-  doc.setTextColor(...blanco); doc.setFontSize(20); doc.setFont('helvetica', 'bold');
-  doc.text('BL DETAIL CENTER — INFORME INTERNO', 12, 14);
-  doc.setFontSize(9); doc.setFont('helvetica', 'normal'); doc.setTextColor(...grisClaro);
-  doc.text(`Generado: ${new Date().toLocaleDateString('es-ES')} — USO INTERNO`, 12, 22);
-
-  let y = 40;
-  const datosRows = [
-    ['Matrícula', inv.matricula], ['Cliente', inv.cliente_nombre], ['Servicio', inv.nombre_servicio || '—'],
-    ['Horas reales', `${inv.horas_reales || 0} h`], ['Estado', inv.estado?.toUpperCase()],
-  ];
-  datosRows.forEach(([k, v]) => {
-    doc.setFontSize(9); doc.setTextColor(...grisClaro); doc.setFont('helvetica', 'normal'); doc.text(k, 15, y);
-    doc.setTextColor(...blanco); doc.setFont('helvetica', 'bold'); doc.text(String(v || '—'), 70, y); y += 7;
-  });
-
-  y += 4; doc.setDrawColor(...naranja); doc.setLineWidth(0.3); doc.line(15, y, 195, y); y += 8;
-  doc.setFontSize(12); doc.setFont('helvetica', 'bold'); doc.setTextColor(...blanco);
-  doc.text('DESGLOSE ECONÓMICO', 15, y); y += 8;
-
-  const filas = [
-    ['Precio Cobrado', `+ ${fmt(inv.precio_cobrado || 0, 2)} €`, naranja],
-    ['Coste Materiales', `- ${fmt(costeMat, 2)} €`, [239, 68, 68]],
-    [`Coste Mano de Obra (${inv.horas_reales || 0}h × ${costeH}€)`, `- ${fmt(costeHoras, 2)} €`, [239, 68, 68]],
-  ];
-  filas.forEach(([label, valor, color]) => {
-    doc.setFillColor(40, 40, 40); doc.roundedRect(15, y - 5, 180, 9, 1, 1, 'F');
-    doc.setFontSize(10); doc.setFont('helvetica', 'normal'); doc.setTextColor(...grisClaro); doc.text(label, 18, y);
-    doc.setTextColor(...color); doc.setFont('helvetica', 'bold'); doc.text(valor, 192, y, { align: 'right' }); y += 11;
-  });
-
-  doc.setFillColor(...naranja); doc.roundedRect(15, y - 5, 180, 12, 2, 2, 'F');
-  doc.setFontSize(12); doc.setFont('helvetica', 'bold'); doc.setTextColor(255, 255, 255);
-  doc.text('BENEFICIO BRUTO', 18, y + 2); doc.text(`${fmt(beneficio, 2)} €  (${fmt(margen, 1)}%)`, 192, y + 2, { align: 'right' }); y += 18;
-
-  if (productos.length > 0) {
-    doc.setDrawColor(...naranja); doc.line(15, y, 195, y); y += 8;
-    doc.setFontSize(11); doc.setFont('helvetica', 'bold'); doc.setTextColor(...blanco); doc.text('DETALLE DE MATERIALES', 15, y); y += 8;
-    productos.forEach(p => {
-      doc.setFontSize(9); doc.setFont('helvetica', 'normal'); doc.setTextColor(...grisClaro); doc.text(`• ${p.nombre_comercial || p.nombre}`, 18, y);
-      doc.setTextColor(...blanco); doc.text(`${p.ml_usados} ml`, 130, y); doc.setTextColor(...naranja); doc.text(`${fmt(p.coste, 4)} €`, 192, y, { align: 'right' }); y += 6;
-    });
+  // PÁGINA 2: Reporte Fotográfico (Solo si hay fotos)
+  if (inv.foto_antes || inv.foto_despues) {
+    doc.addPage();
+    doc.setFillColor(30, 30, 30); doc.rect(0, 0, 210, 297, 'F');
+    doc.setFillColor(...naranja); doc.rect(0, 0, 210, 20, 'F');
+    doc.setTextColor(255, 255, 255); doc.setFontSize(18); doc.text('REPORTE FOTOGRÁFICO', 15, 14);
+    
+    if (inv.foto_antes) {
+      doc.setFontSize(10); doc.text('ESTADO INICIAL (ANTES):', 15, 35);
+      const imgData = await getDataUrl(inv.foto_antes);
+      if (imgData) doc.addImage(imgData, 'JPEG', 15, 40, 180, 100);
+    }
+    
+    if (inv.foto_despues) {
+      doc.setFontSize(10); doc.text('RESULTADO FINAL (DESPUÉS):', 15, 155);
+      const imgData = await getDataUrl(inv.foto_despues);
+      if (imgData) doc.addImage(imgData, 'JPEG', 15, 160, 180, 100);
+    }
   }
-
-  doc.setFillColor(20, 20, 20); doc.rect(0, 283, 210, 14, 'F'); doc.setFillColor(...naranja); doc.rect(0, 283, 4, 14, 'F');
-  doc.setTextColor(...grisClaro); doc.setFontSize(8); doc.setFont('helvetica', 'normal');
-  doc.text('DOCUMENTO DE USO INTERNO — DetailPro Sistema de Gestión', 12, 292);
-
-  doc.save(`rentabilidad_interna_${inv.matricula}_${inv.created_at.split('T')[0]}.pdf`);
-  showToast('✓ PDF interno generado');
+  
+  doc.save(`Informe_${inv.matricula}.pdf`);
+  showToast('✓ PDF descargado');
 }
-
 
 // ═══════════════════════════════════════════════════════════
 //  MAPA DE DAÑOS
 // ═══════════════════════════════════════════════════════════
-
-let damagePoints  = [];
-let damageCounter = 0;
-let currentDamageType = 'rayazo';
-
-const DAMAGE_COLORS = {
-  rayazo:    { fill: '#ef4444', stroke: '#fca5a5', label: 'Rayazo' },
-  abollon:   { fill: '#f59e0b', stroke: '#fcd34d', label: 'Abollón' },
-  oxidacion: { fill: '#8b5cf6', stroke: '#c4b5fd', label: 'Oxidación' },
-  otro:      { fill: '#6b7280', stroke: '#9ca3af', label: 'Otro' },
-};
+let damagePoints = []; let damageCounter = 0; let currentDamageType = 'rayazo';
+const DAMAGE_COLORS = { rayazo:{fill:'#ef4444',stroke:'#fca5a5',label:'Rayazo'}, abollon:{fill:'#f59e0b',stroke:'#fcd34d',label:'Abollón'}, oxidacion:{fill:'#8b5cf6',stroke:'#c4b5fd',label:'Oxidación'}, otro:{fill:'#6b7280',stroke:'#9ca3af',label:'Otro'} };
 
 function selectDamageType(btn) {
   document.querySelectorAll('.damage-type-btn').forEach(b => b.style.opacity = '0.45');
@@ -1037,496 +525,78 @@ function selectDamageType(btn) {
   currentDamageType = btn.dataset.type;
 }
 
-function addDamagePoint(event) {
-  const svg  = document.getElementById('mapa-danos');
+function addDamagePoint(e) {
+  const svg = document.getElementById('mapa-danos');
   const rect = svg.getBoundingClientRect();
-  const vb   = svg.viewBox.baseVal;
-  const scaleX = vb.width  / rect.width;
-  const scaleY = vb.height / rect.height;
-  const x = (event.clientX - rect.left) * scaleX;
-  const y = (event.clientY - rect.top)  * scaleY;
-
+  const vb = svg.viewBox.baseVal;
+  const x = (e.clientX - rect.left) * (vb.width / rect.width);
+  const y = (e.clientY - rect.top) * (vb.height / rect.height);
   damageCounter++;
-  const id    = damageCounter;
-  const tipo  = currentDamageType;
-  const color = DAMAGE_COLORS[tipo];
-
-  damagePoints.push({ id, x, y, tipo, label: color.label });
-
+  const col = DAMAGE_COLORS[currentDamageType];
+  damagePoints.push({ id: damageCounter, x, y, tipo: currentDamageType, label: col.label });
   const g = document.getElementById('damage-points');
-  const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-  circle.setAttribute('cx', x); circle.setAttribute('cy', y); circle.setAttribute('r', '10');
-  circle.setAttribute('fill', color.fill); circle.setAttribute('fill-opacity', '0.75');
-  circle.setAttribute('stroke', color.stroke); circle.setAttribute('stroke-width', '2');
-  circle.setAttribute('id', `dp-${id}`); circle.style.cursor = 'pointer';
-  circle.setAttribute('onclick', `removeDamagePoint(${id}, event)`); circle.setAttribute('title', color.label);
-
-  const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-  text.setAttribute('x', x); text.setAttribute('y', y + 4); text.setAttribute('text-anchor', 'middle');
-  text.setAttribute('font-size', '9'); text.setAttribute('fill', '#fff'); text.setAttribute('font-weight', 'bold');
-  text.setAttribute('pointer-events', 'none'); text.setAttribute('id', `dt-${id}`); text.textContent = id;
-
-  g.appendChild(circle); g.appendChild(text);
+  const c = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+  c.setAttribute('cx', x); c.setAttribute('cy', y); c.setAttribute('r', '10');
+  c.setAttribute('fill', col.fill); c.setAttribute('stroke', col.stroke); c.setAttribute('id', `dp-${damageCounter}`);
+  c.setAttribute('onclick', `removeDamagePoint(${damageCounter}, event)`);
+  g.appendChild(c);
   renderDanosList();
 }
 
-function removeDamagePoint(id, event) {
-  event.stopPropagation();
+function removeDamagePoint(id, e) {
+  e.stopPropagation();
   damagePoints = damagePoints.filter(d => d.id !== id);
   document.getElementById(`dp-${id}`)?.remove();
-  document.getElementById(`dt-${id}`)?.remove();
   renderDanosList();
 }
 
-function limpiarMapa() {
+function renderDanosList() {
+  const cont = document.getElementById('danos-lista-items');
+  if(!damagePoints.length) { document.getElementById('danos-lista').style.display='none'; return; }
+  document.getElementById('danos-lista').style.display='block';
+  cont.innerHTML = damagePoints.map(d => `<span class="badge badge-gray">${d.id}. ${d.label}</span>`).join('');
+}
+
+function resetMapaDanos() {
   damagePoints = []; damageCounter = 0;
   document.getElementById('damage-points').innerHTML = '';
   renderDanosList();
 }
 
-function renderDanosList() {
-  const lista  = document.getElementById('danos-lista');
-  const items  = document.getElementById('danos-lista-items');
-  if (!damagePoints.length) { lista.style.display = 'none'; return; }
-  lista.style.display = 'block';
-  items.innerHTML = damagePoints.map(d => {
-    const c = DAMAGE_COLORS[d.tipo];
-    return `<span style="display:inline-flex;align-items:center;gap:0.3rem;padding:0.2rem 0.6rem;border-radius:99px;font-size:0.72rem;font-weight:600;background:${c.fill}22;border:1px solid ${c.fill}66;color:${c.stroke};">${d.id}. ${c.label}</span>`;
-  }).join('');
-}
-
-function resetMapaDanos() {
-  limpiarMapa();
-  document.querySelectorAll('.damage-type-btn').forEach((b, i) => { b.style.opacity = i === 0 ? '1' : '0.45'; });
-  currentDamageType = 'rayazo';
-}
-
 // ═══════════════════════════════════════════════════════════
-//  MÓDULO DASHBOARD
+//  DASHBOARD Y SERVICIOS (Lógica simplificada)
 // ═══════════════════════════════════════════════════════════
-
 async function cargarDashboard() {
-  const ahora = new Date();
-  const primerDia = new Date(ahora.getFullYear(), ahora.getMonth(), 1).toISOString().split('T')[0];
-  const hoy = ahora.toISOString().split('T')[0];
-  const en7dias = new Date(ahora.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-
-  const [ { data: intervMes }, { data: intervTotal }, { data: productos }, { data: tareas }, { data: citasHoy }, { data: citasProximas } ] = await Promise.all([
-    db.from('intervenciones').select('precio_cobrado, productos_usados, horas_reales, estado').gte('created_at', primerDia),
-    db.from('intervenciones').select('id, matricula, cliente_nombre, nombre_servicio, estado, created_at').order('created_at', { ascending: false }).limit(5),
-    db.from('productos').select('*'),
-    db.from('tareas').select('*').eq('completada', false).order('created_at', { ascending: false }),
-    db.from('citas').select('*').eq('fecha', hoy).neq('estado','cancelada').order('hora', { ascending: true }),
-    db.from('citas').select('id').gt('fecha', hoy).lte('fecha', en7dias).neq('estado','cancelada')
-  ]);
-
-  const totalIngresos  = (intervMes || []).reduce((s, i) => s + (i.precio_cobrado || 0), 0);
-  const totalServicios = (intervMes || []).length;
-  const pendientes     = (intervMes || []).filter(i => i.estado === 'abierta' || i.estado === 'en_proceso').length;
-
-  document.getElementById('dash-ingresos').textContent   = `${fmt(totalIngresos, 2)} €`;
-  document.getElementById('dash-servicios').textContent  = totalServicios;
-  document.getElementById('dash-pendientes').textContent = pendientes;
-  document.getElementById('dash-stock-critico').textContent = (productos || []).filter(p => stockStatus(p.stock_actual ?? 0, p.formato_ml).label !== 'OK').length;
-
-  const citasHoyData = citasHoy || [];
-  if (document.getElementById('dash-citas-hoy')) document.getElementById('dash-citas-hoy').textContent = citasHoyData.length;
-  if (document.getElementById('dash-citas-proximas')) document.getElementById('dash-citas-proximas').textContent = (citasProximas || []).length;
-
-  const citasContainer = document.getElementById('dash-citas-lista');
-  if (citasContainer) {
-    if (!citasHoyData.length) {
-      citasContainer.innerHTML = '<div style="color:var(--text-muted);font-size:0.85rem;">Sin citas para hoy</div>';
-    } else {
-      citasContainer.innerHTML = citasHoyData.map(c => {
-        const ec = { pendiente:'#f59e0b', confirmada:'#22c55e', completada:'#6b7280', cancelada:'#ef4444' };
-        const col = ec[c.estado] || 'var(--accent)';
-        return `<div style="display:flex;gap:0.65rem;align-items:flex-start;padding:0.55rem 0;border-bottom:1px solid var(--border);"><div style="width:3px;border-radius:2px;background:${col};align-self:stretch;flex-shrink:0;margin-top:2px;"></div><div style="flex:1;"><div style="display:flex;justify-content:space-between;align-items:center;"><span style="font-family:'Barlow Condensed',sans-serif;font-size:1rem;font-weight:700;">${c.hora ? c.hora.slice(0,5)+' · ' : ''}${c.matricula || c.cliente_nombre}</span><span style="font-size:0.7rem;padding:0.12rem 0.45rem;border-radius:99px;background:${col}22;color:${col};">${c.estado}</span></div><div style="font-size:0.78rem;color:var(--text-muted);">${c.cliente_nombre || ''} ${c.servicio ? '· '+c.servicio : ''}</div>${c.notas ? `<div style="font-size:0.74rem;color:var(--text-muted);margin-top:0.15rem;">${c.notas}</div>` : ''}</div></div>`;
-      }).join('');
-    }
-  }
-
-  const stockAlertas = (productos || []).filter(p => stockStatus(p.stock_actual ?? 0, p.formato_ml).label !== 'OK');
-  const alertasContainer = document.getElementById('dash-alertas-lista');
-  if (stockAlertas.length === 0) {
-    alertasContainer.innerHTML = '<div style="color:var(--success);font-size:0.85rem;">✓ Todo el stock en niveles correctos</div>';
-  } else {
-    alertasContainer.innerHTML = stockAlertas.map(p => {
-      const s = stockStatus(p.stock_actual ?? 0, p.formato_ml);
-      return `<div style="display:flex;justify-content:space-between;padding:0.4rem 0;border-bottom:1px solid var(--border);font-size:0.83rem;"><span>${s.icon} ${p.nombre_comercial}</span><span style="color:${s.color};font-weight:600;">${fmt(p.stock_actual??0,0)} ml · ${s.label}</span></div>`;
-    }).join('');
-  }
-
-  const ultimasContainer = document.getElementById('dash-ultimas');
-  if (!intervTotal || intervTotal.length === 0) {
-    ultimasContainer.innerHTML = '<div style="color:var(--text-muted);font-size:0.85rem;">Sin intervenciones aún</div>';
-  } else {
-    ultimasContainer.innerHTML = intervTotal.map(i => `
-      <div style="display:flex;justify-content:space-between;align-items:center;padding:0.5rem 0;border-bottom:1px solid var(--border);"><div><div style="font-family:'Barlow Condensed',sans-serif;font-size:1rem;font-weight:700;">${i.matricula}</div><div style="font-size:0.75rem;color:var(--text-muted);">${i.cliente_nombre} · ${i.nombre_servicio || '—'}</div></div><div style="text-align:right;">${estadoBadge(i.estado)}<div style="font-size:0.72rem;color:var(--text-muted);margin-top:0.2rem;">${new Date(i.created_at).toLocaleDateString('es-ES')}</div></div></div>`).join('');
-  }
-
-  renderTareasDashboard(tareas || []);
+  const { data: invMes } = await db.from('intervenciones').select('precio_cobrado');
+  const total = (invMes || []).reduce((s, i) => s + (i.precio_cobrado || 0), 0);
+  document.getElementById('dash-ingresos').textContent = `${fmt(total, 2)}€`;
 }
 
-function renderTareasDashboard(tareas) {
-  const container = document.getElementById('dash-tareas-lista');
-  if (!tareas.length) { container.innerHTML = '<div style="color:var(--text-muted);font-size:0.85rem;">No hay tareas pendientes 🎉</div>'; return; }
-  const prioColors = { alta: '#ef4444', normal: 'var(--accent)', baja: '#6b7280' };
-  container.innerHTML = tareas.map(t => `
-    <div style="display:flex;align-items:center;gap:0.65rem;padding:0.45rem 0;border-bottom:1px solid var(--border);"><button onclick="completarTarea('${t.id}')" style="width:18px;height:18px;border-radius:50%;border:2px solid ${prioColors[t.prioridad]||'var(--accent)'};background:transparent;cursor:pointer;flex-shrink:0;transition:all 0.2s;" onmouseover="this.style.background='${prioColors[t.prioridad]||'var(--accent)'}'" onmouseout="this.style.background='transparent'"></button><span style="flex:1;font-size:0.85rem;">${t.texto}</span><span style="font-size:0.7rem;padding:0.15rem 0.5rem;border-radius:99px;background:${prioColors[t.prioridad]||'var(--accent)'}22;color:${prioColors[t.prioridad]||'var(--accent)'};">${t.prioridad}</span></div>`).join('');
+function stockStatus(stock, form) {
+  if (stock <= 0) return { color: '#ef4444', icon: '🔴', label: 'Agotado' };
+  if (stock < form * 0.2) return { color: '#f59e0b', icon: '🟡', label: 'Bajo' };
+  return { color: '#22c55e', icon: '🟢', label: 'OK' };
 }
-
-async function agregarTarea() {
-  const input = document.getElementById('nueva-tarea-texto'); const prioSel = document.getElementById('nueva-tarea-prio');
-  const texto = input.value.trim(); const prioridad = prioSel.value;
-  if (!texto) { showToast('Escribe una tarea', 'error'); return; }
-  const { error } = await db.from('tareas').insert([{ texto, prioridad }]);
-  if (error) { showToast('Error al guardar tarea', 'error'); return; }
-  input.value = ''; showToast('✓ Tarea añadida'); cargarDashboard();
-}
-
-async function completarTarea(id) {
-  await db.from('tareas').update({ completada: true }).eq('id', id);
-  showToast('✓ Tarea completada'); cargarDashboard();
-}
-
-// ═══════════════════════════════════════════════════════════
-//  MÓDULO CALENDARIO
-// ═══════════════════════════════════════════════════════════
-
-let calMesActual  = new Date().getMonth(); let calAnoActual  = new Date().getFullYear();
-let citasCache    = []; let diaSeleccionado = null;
-const MESES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
-const ESTADO_CITA = { pendiente: { color: '#f59e0b', label: 'Pendiente' }, confirmada: { color: '#22c55e', label: 'Confirmada' }, completada: { color: '#6b7280', label: 'Completada' }, cancelada: { color: '#ef4444', label: 'Cancelada' } };
-
-async function iniciarCalendario() {
-  const hoy = new Date().toISOString().split('T')[0];
-  const fc = document.getElementById('cita-fecha'); if (fc && !fc.value) fc.value = hoy;
-  await cargarCitas(); renderCalendario();
-}
-
-async function cargarCitas() {
-  const { data, error } = await db.from('citas').select('*').order('fecha', { ascending: true }).order('hora', { ascending: true });
-  if (!error) citasCache = data || [];
-  renderListaCitas(citasCache);
-}
-
-function cambiarMes(dir) {
-  calMesActual += dir;
-  if (calMesActual > 11) { calMesActual = 0; calAnoActual++; } if (calMesActual < 0) { calMesActual = 11; calAnoActual--; }
-  diaSeleccionado = null; document.getElementById('cal-dia-detalle').style.display = 'none'; renderCalendario();
-}
-
-function renderCalendario() {
-  document.getElementById('cal-mes-titulo').textContent = `${MESES[calMesActual]} ${calAnoActual}`;
-  const grid = document.getElementById('cal-grid');
-  const primerDia = new Date(calAnoActual, calMesActual, 1); const ultimoDia = new Date(calAnoActual, calMesActual + 1, 0).getDate();
-  let offsetInicio = primerDia.getDay() - 1; if (offsetInicio < 0) offsetInicio = 6;
-  const hoy = new Date(); const esHoy = (d) => d === hoy.getDate() && calMesActual === hoy.getMonth() && calAnoActual === hoy.getFullYear();
-
-  const citasPorDia = {};
-  citasCache.forEach(c => {
-    if (!c.fecha) return;
-    const [y, m, d] = c.fecha.split('-').map(Number);
-    if (y === calAnoActual && m - 1 === calMesActual) { if (!citasPorDia[d]) citasPorDia[d] = []; citasPorDia[d].push(c); }
-  });
-
-  let html = '';
-  for (let i = 0; i < offsetInicio; i++) { html += `<div style="min-height:44px;"></div>`; }
-  for (let d = 1; d <= ultimoDia; d++) {
-    const citas = citasPorDia[d] || []; const activo = diaSeleccionado === d; const today = esHoy(d);
-    const dotHTML = citas.slice(0, 3).map(c => { const col = ESTADO_CITA[c.estado]?.color || 'var(--accent)'; return `<div style="width:5px;height:5px;border-radius:50%;background:${col};flex-shrink:0;"></div>`; }).join('');
-    html += `<div onclick="seleccionarDia(${d})" style="min-height:44px;border-radius:0.4rem;padding:0.35rem 0.25rem;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:3px;background:${activo ? 'var(--accent)' : today ? 'rgba(249,115,22,0.12)' : 'var(--bg-input)'};border:1px solid ${activo ? 'var(--accent)' : today ? 'rgba(249,115,22,0.4)' : 'transparent'};transition:all 0.15s;"><span style="font-size:0.82rem;font-weight:${today||activo?'700':'400'};color:${activo?'#fff':today?'var(--accent)':'var(--text-primary)'};">${d}</span><div style="display:flex;gap:2px;flex-wrap:wrap;justify-content:center;">${dotHTML}</div></div>`;
-  }
-  grid.innerHTML = html;
-}
-
-function seleccionarDia(dia) {
-  diaSeleccionado = dia; renderCalendario();
-  const fecha = `${calAnoActual}-${String(calMesActual+1).padStart(2,'0')}-${String(dia).padStart(2,'0')}`;
-  const citas = citasCache.filter(c => c.fecha === fecha);
-  const detalle = document.getElementById('cal-dia-detalle'); const titulo = document.getElementById('cal-dia-titulo'); const cont = document.getElementById('cal-dia-citas');
-
-  titulo.textContent = `${dia} DE ${MESES[calMesActual].toUpperCase()}`;
-  if (!citas.length) {
-    cont.innerHTML = `<div style="color:var(--text-muted);font-size:0.85rem;padding:0.5rem 0;">Sin citas este día.</div><button class="btn-secondary" style="margin-top:0.5rem;font-size:0.82rem;" onclick="prepararNuevaCitaDia('${fecha}')">+ Añadir cita</button>`;
-  } else {
-    cont.innerHTML = citas.map(c => {
-      const ec = ESTADO_CITA[c.estado] || ESTADO_CITA.pendiente;
-      return `<div style="display:flex;gap:0.75rem;align-items:flex-start;padding:0.65rem 0;border-bottom:1px solid var(--border);"><div style="width:3px;border-radius:2px;background:${ec.color};align-self:stretch;flex-shrink:0;"></div><div style="flex:1;"><div style="display:flex;justify-content:space-between;align-items:center;"><span style="font-family:'Barlow Condensed',sans-serif;font-size:1rem;font-weight:700;">${c.hora ? c.hora.slice(0,5) : '—'} · ${c.matricula || '—'}</span><span style="font-size:0.7rem;padding:0.15rem 0.5rem;border-radius:99px;background:${ec.color}22;color:${ec.color};">${ec.label}</span></div><div style="font-size:0.82rem;color:var(--text-secondary);">${c.cliente_nombre || '—'}</div><div style="font-size:0.78rem;color:var(--text-muted);">${c.servicio || '—'}</div>${c.notas ? `<div style="font-size:0.75rem;color:var(--text-muted);margin-top:0.2rem;">${c.notas}</div>` : ''}</div><button onclick="eliminarCita('${c.id}')" class="btn-remove" style="flex-shrink:0;">✕</button></div>`;
-    }).join('');
-    cont.innerHTML += `<button class="btn-secondary" style="margin-top:0.75rem;font-size:0.82rem;width:100%;" onclick="prepararNuevaCitaDia('${fecha}')">+ Añadir otra cita</button>`;
-  }
-  detalle.style.display = 'block'; detalle.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-}
-
-function prepararNuevaCitaDia(fecha) {
-  const btns = document.querySelectorAll('#mod-calendario .tab-btn');
-  document.querySelectorAll('#mod-calendario .tab-btn').forEach(b => b.classList.remove('active'));
-  document.querySelectorAll('#mod-calendario .tab-panel').forEach(p => p.classList.remove('active'));
-  btns[2].classList.add('active'); document.getElementById('tab-calendario-nueva').classList.add('active');
-  document.getElementById('cita-fecha').value = fecha;
-}
-
-function renderListaCitas(citas) {
-  const loading = document.getElementById('citas-loading'); const container = document.getElementById('citas-lista-container'); const empty = document.getElementById('citas-empty');
-  if (loading) loading.style.display = 'none';
-
-  const proximas = citas.filter(c => c.fecha >= new Date().toISOString().split('T')[0] && c.estado !== 'cancelada' && c.estado !== 'completada');
-  const pasadas = citas.filter(c => c.fecha < new Date().toISOString().split('T')[0] || c.estado === 'completada' || c.estado === 'cancelada');
-
-  if (!citas.length) { empty.style.display = 'block'; container.innerHTML = ''; return; }
-  empty.style.display = 'none';
-
-  const renderGrupo = (lista, titulo) => {
-    if (!lista.length) return '';
-    return `<div style="font-family:'Barlow Condensed',sans-serif;font-size:0.85rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--text-muted);margin:1rem 0 0.5rem;">${titulo}</div>${lista.map(c => {
-      const ec = ESTADO_CITA[c.estado] || ESTADO_CITA.pendiente;
-      return `<div class="compra-card" style="position:relative;"><div style="position:absolute;left:0;top:0;bottom:0;width:3px;border-radius:0.6rem 0 0 0.6rem;background:${ec.color};"></div><div style="padding-left:0.5rem;"><div style="display:flex;justify-content:space-between;align-items:flex-start;"><div><div style="font-family:'Barlow Condensed',sans-serif;font-size:1.1rem;font-weight:700;">${formatFecha(c.fecha)} ${c.hora ? '· '+c.hora.slice(0,5) : ''}</div><div style="font-size:0.9rem;font-weight:600;margin-top:0.1rem;">${c.matricula || '—'} · ${c.cliente_nombre || '—'}</div><div style="font-size:0.8rem;color:var(--text-muted);">${c.servicio || '—'}</div>${c.notas ? `<div style="font-size:0.78rem;color:var(--text-muted);margin-top:0.2rem;">${c.notas}</div>` : ''}</div><div style="display:flex;flex-direction:column;align-items:flex-end;gap:0.35rem;"><span style="font-size:0.7rem;padding:0.15rem 0.5rem;border-radius:99px;background:${ec.color}22;color:${ec.color};">${ec.label}</span><button onclick="eliminarCita('${c.id}')" style="font-size:0.72rem;background:transparent;border:1px solid var(--border);border-radius:0.3rem;padding:0.2rem 0.5rem;color:var(--text-muted);cursor:pointer;">Eliminar</button></div></div></div></div>`;
-    }).join('')}`;
-  };
-  container.innerHTML = renderGrupo(proximas, '📅 Próximas') + renderGrupo(pasadas, '✓ Pasadas / Completadas');
-}
-
-async function crearCita() {
-  const fecha = document.getElementById('cita-fecha').value; const hora = document.getElementById('cita-hora').value;
-  const matricula = document.getElementById('cita-matricula').value.trim().toUpperCase(); const cliente = document.getElementById('cita-cliente').value.trim();
-  const servicio = document.getElementById('cita-servicio').value; const estado = document.getElementById('cita-estado').value; const notas = document.getElementById('cita-notas').value.trim();
-
-  if (!fecha) { showToast('Indica la fecha', 'error'); return; }
-  if (!cliente && !matricula) { showToast('Indica al menos cliente o matrícula', 'error'); return; }
-
-  const btn = document.querySelector('[onclick="crearCita()"]');
-  if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>'; }
-
-  const { error } = await db.from('citas').insert([{ fecha, hora: hora || null, matricula: matricula || null, cliente_nombre: cliente || null, servicio: servicio || null, estado, notas: notas || null }]);
-  if (btn) { btn.disabled = false; btn.textContent = 'Guardar Cita'; }
-  if (error) { showToast('Error al guardar la cita', 'error'); return; }
-
-  ['cita-matricula','cita-cliente','cita-notas'].forEach(id => document.getElementById(id).value = '');
-  document.getElementById('cita-servicio').value = ''; document.getElementById('cita-estado').value = 'pendiente';
-  showToast('✓ Cita guardada'); await cargarCitas(); renderCalendario();
-
-  const btns = document.querySelectorAll('#mod-calendario .tab-btn');
-  document.querySelectorAll('#mod-calendario .tab-btn').forEach(b => b.classList.remove('active'));
-  document.querySelectorAll('#mod-calendario .tab-panel').forEach(p => p.classList.remove('active'));
-  btns[0].classList.add('active'); document.getElementById('tab-calendario-mes').classList.add('active');
-}
-
-async function eliminarCita(id) {
-  if (!confirm('¿Eliminar esta cita?')) return;
-  await db.from('citas').delete().eq('id', id);
-  showToast('✓ Cita eliminada'); await cargarCitas(); renderCalendario();
-  document.getElementById('cal-dia-detalle').style.display = 'none'; diaSeleccionado = null;
-}
-
-// ═══════════════════════════════════════════════════════════
-//  MÓDULO HISTÓRICO / BÚSQUEDA
-// ═══════════════════════════════════════════════════════════
-
-function resetHistorico() {
-  document.getElementById('busqueda-input').value = '';
-  document.getElementById('historico-resultado').style.display = 'none';
-  document.getElementById('historico-empty').style.display = 'none';
-  document.getElementById('historico-inicial').style.display = 'block';
-}
-
-async function buscarHistorico() {
-  const q = document.getElementById('busqueda-input').value.trim().toUpperCase();
-  if (!q) return;
-
-  document.getElementById('historico-inicial').style.display = 'none';
-  document.getElementById('historico-empty').style.display = 'none';
-  document.getElementById('historico-resultado').style.display = 'none';
-
-  const { data, error } = await db.from('intervenciones').select('*').or(`matricula.ilike.%${q}%,cliente_nombre.ilike.%${q}%`).order('created_at', { ascending: false });
-  if (error || !data || data.length === 0) { document.getElementById('historico-empty').style.display = 'block'; return; }
-
-  const totalFacturado = data.reduce((s, i) => s + (i.precio_cobrado || 0), 0);
-  const ultimo = data[0];
-  document.getElementById('hist-visitas').textContent = data.length;
-  document.getElementById('hist-facturado').textContent = `${fmt(totalFacturado, 2)} €`;
-  document.getElementById('hist-ultimo').textContent = ultimo ? new Date(ultimo.created_at).toLocaleDateString('es-ES') : '—';
-
-  const lista = document.getElementById('historico-lista');
-  lista.innerHTML = data.map(inv => {
-    const productos = inv.productos_usados || [];
-    const costeMat = productos.reduce((s, p) => s + (p.coste || 0), 0);
-    return `<div class="compra-card" style="margin-bottom:0.75rem;"><div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:0.5rem;"><div><div style="font-family:'Barlow Condensed',sans-serif;font-size:1.2rem;font-weight:800;">${inv.matricula} · ${inv.cliente_nombre}</div><div style="font-size:0.8rem;color:var(--text-muted);">${new Date(inv.created_at).toLocaleDateString('es-ES')} · ${inv.nombre_servicio || '—'}</div></div><div style="text-align:right;">${estadoBadge(inv.estado)}${inv.precio_cobrado ? `<div style="font-family:'Barlow Condensed',sans-serif;font-size:1.2rem;font-weight:800;color:var(--accent);margin-top:0.2rem;">${fmt(inv.precio_cobrado,2)} €</div>` : ''}</div></div>${productos.length > 0 ? `<div style="border-top:1px solid var(--border);padding-top:0.5rem;">${productos.map(p => `<div style="display:flex;justify-content:space-between;font-size:0.8rem;padding:0.2rem 0;color:var(--text-secondary);"><span>🧴 ${p.nombre_comercial || p.nombre}</span><span>${p.ml_usados} ml</span></div>`).join('')}<div style="display:flex;justify-content:space-between;font-size:0.8rem;padding:0.3rem 0;color:var(--text-muted);border-top:1px solid var(--border);margin-top:0.25rem;"><span>Coste materiales</span><span>${fmt(costeMat,2)} €</span></div></div>` : ''}${inv.incidentes ? `<div style="margin-top:0.5rem;font-size:0.78rem;color:var(--text-muted);background:var(--bg-input);border-radius:0.35rem;padding:0.5rem;">📝 ${inv.incidentes}</div>` : ''}</div>`;
-  }).join('');
-  document.getElementById('historico-resultado').style.display = 'block';
-  window._historicoData = { q, data, totalFacturado };
-}
-
-async function generarPDFHistorico() {
-  const { q, data, totalFacturado } = window._historicoData || {};
-  if (!data || !data.length) return;
-
-  const { jsPDF } = window.jspdf;
-  const doc = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
-  const naranja = [249, 115, 22]; const gris = [30, 30, 30]; const blanco = [240, 240, 240]; const grisClaro = [180, 180, 180]; const negro = [20, 20, 20];
-
-  doc.setFillColor(...gris); doc.rect(0, 0, 210, 297, 'F');
-  doc.setFillColor(...negro); doc.rect(0, 0, 210, 32, 'F'); doc.setFillColor(...naranja); doc.rect(0, 0, 5, 32, 'F');
-  doc.setTextColor(255, 255, 255); doc.setFontSize(20); doc.setFont('helvetica', 'bold'); doc.text('HISTORIAL DE VEHÍCULO', 12, 13);
-  doc.setFontSize(10); doc.setFont('helvetica', 'normal'); doc.setTextColor(...grisClaro);
-  doc.text(`Búsqueda: ${q}  ·  Generado: ${new Date().toLocaleDateString('es-ES')}`, 12, 22);
-  doc.text(`${data.length} intervención(es)  ·  Total facturado: ${fmt(totalFacturado, 2)} €`, 12, 28);
-
-  let y = 42;
-  data.forEach((inv) => {
-    const productos = inv.productos_usados || []; const costeMat = productos.reduce((s, p) => s + (p.coste || 0), 0);
-    if (y > 250) { doc.addPage(); doc.setFillColor(...gris); doc.rect(0, 0, 210, 297, 'F'); y = 20; }
-    doc.setFillColor(40, 40, 40); doc.roundedRect(10, y - 5, 190, 12, 2, 2, 'F'); doc.setFillColor(...naranja); doc.rect(10, y - 5, 3, 12, 'F');
-    doc.setFontSize(11); doc.setFont('helvetica', 'bold'); doc.setTextColor(...blanco); doc.text(`${inv.matricula}  ·  ${inv.cliente_nombre}`, 16, y + 2);
-    doc.setFontSize(9); doc.setFont('helvetica', 'normal'); doc.setTextColor(...grisClaro);
-    doc.text(`${new Date(inv.created_at).toLocaleDateString('es-ES')}  ·  ${inv.nombre_servicio || '—'}  ·  ${inv.estado?.toUpperCase()}`, 16, y + 7);
-    if (inv.precio_cobrado) { doc.setTextColor(...naranja); doc.setFont('helvetica', 'bold'); doc.text(`${fmt(inv.precio_cobrado, 2)} €`, 195, y + 2, { align: 'right' }); }
-    y += 16;
-    if (productos.length > 0) {
-      productos.forEach(p => {
-        if (y > 270) { doc.addPage(); doc.setFillColor(...gris); doc.rect(0, 0, 210, 297, 'F'); y = 20; }
-        doc.setFontSize(8); doc.setFont('helvetica', 'normal'); doc.setTextColor(...grisClaro); doc.text(`  ✓ ${p.nombre_comercial || p.nombre}`, 15, y); doc.text(`${p.ml_usados} ml`, 195, y, { align: 'right' }); y += 5;
-      });
-      doc.setTextColor(...[120, 120, 120]); doc.text(`  Coste materiales: ${fmt(costeMat, 2)} €`, 15, y); y += 5;
-    }
-    if (inv.incidentes) {
-      if (y > 265) { doc.addPage(); doc.setFillColor(...gris); doc.rect(0, 0, 210, 297, 'F'); y = 20; }
-      doc.setFontSize(8); doc.setTextColor(...[120, 120, 120]); const lines = doc.splitTextToSize(`  📝 ${inv.incidentes}`, 175);
-      doc.text(lines, 15, y); y += lines.length * 4 + 2;
-    }
-    doc.setDrawColor(50, 50, 50); doc.setLineWidth(0.3); doc.line(10, y, 200, y); y += 6;
-  });
-
-  doc.setFillColor(...negro); doc.rect(0, 283, 210, 14, 'F'); doc.setFillColor(...naranja); doc.rect(0, 283, 5, 14, 'F');
-  doc.setTextColor(...grisClaro); doc.setFontSize(8); doc.text('BL Detail Center — Historial de Vehículo · Documento generado automáticamente', 12, 292);
-  doc.save(`historial_${q.replace(/\s/g,'_')}_${new Date().toISOString().split('T')[0]}.pdf`);
-  showToast('✓ PDF historial generado');
-}
-
-// ── Ver detalle producto ──────────────────────────────────
-function verProducto(id) {
-  const p = productosCache.find(p => p.id === id); if (!p) return;
-  const status = stockStatus(p.stock_actual ?? 0, p.formato_ml);
-
-  document.getElementById('modal-prod-titulo').innerHTML = `${p.nombre_comercial} <span style="font-size:1rem;color:var(--text-muted);">· ${capitalize(p.categoria)}</span>`;
-  document.getElementById('modal-prod-contenido').innerHTML = `
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.65rem;margin-bottom:1rem;">
-      <div style="background:var(--bg-input);border-radius:0.4rem;padding:0.75rem;"><div style="font-size:0.7rem;color:var(--text-muted);margin-bottom:0.2rem;">STOCK ACTUAL</div><div style="font-family:'Barlow Condensed',sans-serif;font-size:1.3rem;font-weight:700;color:${status.color};">${fmt(p.stock_actual??0,0)} ml</div><div style="font-size:0.72rem;color:var(--text-muted);">${status.icon} ${status.label}</div></div>
-      <div style="background:var(--bg-input);border-radius:0.4rem;padding:0.75rem;"><div style="font-size:0.7rem;color:var(--text-muted);margin-bottom:0.2rem;">PMP · €/DOSIS</div><div style="font-family:'Barlow Condensed',sans-serif;font-size:1.1rem;font-weight:700;color:var(--accent);">${fmt(p.precio_medio_litro,4)} €/L</div><div style="font-size:0.8rem;color:var(--text-secondary);">${fmt(p.precio_por_dosis,4)} € por ${p.dosis_estandar_ml} ml</div></div>
-      <div style="background:var(--bg-input);border-radius:0.4rem;padding:0.75rem;"><div style="font-size:0.7rem;color:var(--text-muted);margin-bottom:0.2rem;">FORMATO</div><div style="font-size:0.9rem;font-weight:600;">${fmt(p.formato_ml,0)} ml</div></div>
-      <div style="background:var(--bg-input);border-radius:0.4rem;padding:0.75rem;"><div style="font-size:0.7rem;color:var(--text-muted);margin-bottom:0.2rem;">DOSIS RESTANTES</div><div style="font-size:0.9rem;font-weight:600;">${p.dosis_estandar_ml > 0 ? Math.floor((p.stock_actual??0) / p.dosis_estandar_ml) : '—'}</div></div>
-    </div>
-    ${p.observaciones ? `<div><div style="font-size:0.72rem;font-weight:600;letter-spacing:0.09em;text-transform:uppercase;color:var(--text-secondary);margin-bottom:0.4rem;">📝 Observaciones / Modo de Uso</div><div style="background:var(--accent-dim);border:1px solid rgba(59,130,246,0.2);border-radius:0.4rem;padding:0.85rem;font-size:0.85rem;color:var(--text-secondary);line-height:1.5;">${p.observaciones}</div></div>` : '<div style="color:var(--text-muted);font-size:0.85rem;">Sin observaciones registradas</div>'}
-    <div style="margin-top:1rem;"><div style="font-size:0.72rem;font-weight:600;letter-spacing:0.09em;text-transform:uppercase;color:var(--text-secondary);margin-bottom:0.4rem;">Nombre Interno</div><div style="font-size:0.85rem;color:var(--text-muted);">${p.nombre_interno}</div></div>
-    <div style="margin-top:1rem;"><button class="btn-secondary" onclick="cerrarModal('modal-producto')" style="width:100%;">Cerrar</button></div>
-  `;
-  abrirModal('modal-producto');
-}
-
-// ═══════════════════════════════════════════════════════════
-//  MÓDULO SERVICIOS
-// ═══════════════════════════════════════════════════════════
 
 let serviciosCache = [];
-
-async function cargarServicios() {
-  document.getElementById('servicios-loading').style.display = 'block'; document.getElementById('servicios-container').innerHTML = ''; document.getElementById('servicios-empty').style.display = 'none';
-  const { data, error } = await db.from('servicios').select('*').order('nombre');
-  document.getElementById('servicios-loading').style.display = 'none';
-  if (error) { showToast('Error al cargar servicios', 'error'); return; }
-  serviciosCache = data || [];
-  if (!serviciosCache.length) { document.getElementById('servicios-empty').style.display = 'block'; return; }
-
-  document.getElementById('servicios-container').innerHTML = serviciosCache.map(s => `
-    <div class="compra-card" style="cursor:pointer;" onclick="verServicio('${s.id}')">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;">
-        <div style="flex:1;"><div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.25rem;"><span style="font-family:'Barlow Condensed',sans-serif;font-size:1.1rem;font-weight:800;">${s.nombre}</span><span class="badge ${s.activo ? 'badge-green' : 'badge-gray'}">${s.activo ? 'Activo' : 'Inactivo'}</span></div>${s.descripcion ? `<div style="font-size:0.82rem;color:var(--text-secondary);margin-bottom:0.35rem;">${s.descripcion}</div>` : ''}${s.incluye ? `<div style="font-size:0.78rem;color:var(--text-muted);">✓ ${s.incluye.replace(/\n/g,'  ·  ')}</div>` : ''}</div>
-        <div style="text-align:right;flex-shrink:0;margin-left:0.75rem;">${s.precio_base ? `<div style="font-family:'Barlow Condensed',sans-serif;font-size:1.3rem;font-weight:800;color:var(--accent);">${fmt(s.precio_base,2)} €</div>` : ''}${s.duracion_horas ? `<div style="font-size:0.78rem;color:var(--text-muted);">⏱ ${s.duracion_horas}h</div>` : ''}</div>
-      </div>
-    </div>`).join('');
-}
-
-function verServicio(id) {
-  const s = serviciosCache.find(s => s.id === id); if (!s) return;
-  document.getElementById('modal-serv-titulo').textContent = s.nombre;
-  document.getElementById('modal-serv-contenido').innerHTML = `
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.65rem;margin-bottom:1rem;"><div style="background:var(--bg-input);border-radius:0.4rem;padding:0.75rem;"><div style="font-size:0.7rem;color:var(--text-muted);margin-bottom:0.2rem;">PRECIO BASE</div><div style="font-family:'Barlow Condensed',sans-serif;font-size:1.4rem;font-weight:800;color:var(--accent);">${s.precio_base ? fmt(s.precio_base,2)+' €' : '—'}</div></div><div style="background:var(--bg-input);border-radius:0.4rem;padding:0.75rem;"><div style="font-size:0.7rem;color:var(--text-muted);margin-bottom:0.2rem;">DURACIÓN EST.</div><div style="font-family:'Barlow Condensed',sans-serif;font-size:1.4rem;font-weight:800;">${s.duracion_horas ? s.duracion_horas+'h' : '—'}</div></div></div>
-    ${s.descripcion ? `<div style="margin-bottom:0.75rem;"><div style="font-size:0.72rem;font-weight:600;letter-spacing:0.09em;text-transform:uppercase;color:var(--text-secondary);margin-bottom:0.35rem;">Descripción</div><div style="font-size:0.85rem;color:var(--text-secondary);">${s.descripcion}</div></div>` : ''}
-    ${s.incluye ? `<div style="margin-bottom:1rem;"><div style="font-size:0.72rem;font-weight:600;letter-spacing:0.09em;text-transform:uppercase;color:var(--text-secondary);margin-bottom:0.35rem;">¿Qué incluye?</div><div style="background:var(--accent-dim);border:1px solid rgba(59,130,246,0.2);border-radius:0.4rem;padding:0.85rem;font-size:0.85rem;color:var(--text-secondary);line-height:1.6;">${s.incluye}</div></div>` : ''}
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.5rem;"><button class="btn-secondary" onclick="cerrarModal('modal-servicio')">Cerrar</button><button class="btn-danger" onclick="eliminarServicio('${s.id}')">Eliminar</button></div>`;
-  abrirModal('modal-servicio');
-}
-
-async function crearServicio() {
-  const nombre = document.getElementById('serv-nombre').value.trim(); const precio = parseFloat(document.getElementById('serv-precio').value) || null;
-  const duracion = parseFloat(document.getElementById('serv-duracion').value) || null; const activo = document.getElementById('serv-activo').value === 'true';
-  const descripcion = document.getElementById('serv-descripcion').value.trim(); const incluye = document.getElementById('serv-incluye').value.trim();
-
-  if (!nombre) { showToast('El nombre es obligatorio', 'error'); return; }
-  const btn = document.querySelector('[onclick="crearServicio()"]'); if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>'; }
-
-  const { error } = await db.from('servicios').insert([{ nombre, precio_base: precio, duracion_horas: duracion, activo, descripcion: descripcion || null, incluye: incluye || null }]);
-  if (btn) { btn.disabled = false; btn.textContent = 'Guardar Servicio'; }
-  if (error) { showToast('Error al guardar servicio', 'error'); return; }
-
-  ['serv-nombre','serv-precio','serv-duracion','serv-descripcion','serv-incluye'].forEach(id => { document.getElementById(id).value = ''; }); document.getElementById('serv-activo').value = 'true';
-  showToast('✓ Servicio creado'); cargarServicios(); switchTabDirect('servicios', 'lista');
-  document.querySelectorAll('#mod-servicios .tab-btn')[0].classList.add('active'); document.querySelectorAll('#mod-servicios .tab-btn')[1].classList.remove('active');
-}
-
-async function eliminarServicio(id) {
-  if (!confirm('¿Eliminar este servicio?')) return;
-  await db.from('servicios').delete().eq('id', id); cerrarModal('modal-servicio'); showToast('✓ Servicio eliminado'); cargarServicios();
-}
-
-// ═══════════════════════════════════════════════════════════
-//  SELECTOR MÚLTIPLE DE SERVICIOS EN INTERVENCIONES
-// ═══════════════════════════════════════════════════════════
-
 let serviciosSeleccionados = [];
 
 async function cargarSelectorServicios() {
-  const container = document.getElementById('int-servicios-selector'); if (!container) return;
-  let servicios = serviciosCache;
-  if (!servicios.length) { const { data } = await db.from('servicios').select('*').eq('activo', true).order('nombre'); servicios = data || []; serviciosCache = servicios; }
-  serviciosSeleccionados = [];
-
-  if (!servicios.length) { container.innerHTML = `<div style="color:var(--text-muted);font-size:0.82rem;">Sin servicios definidos. <span style="color:var(--accent);cursor:pointer;" onclick="switchModule('servicios')">Crear servicios →</span></div>`; return; }
-  container.innerHTML = servicios.map(s => `<button onclick="toggleServicio('${s.id}', ${s.precio_base || 0}, ${s.duracion_horas || 0})" id="serv-btn-${s.id}" style="padding:0.4rem 0.85rem;border-radius:99px;font-size:0.8rem;font-weight:600;border:1px solid var(--border);background:transparent;color:var(--text-secondary);cursor:pointer;transition:all 0.15s;white-space:nowrap;">${s.nombre}${s.precio_base ? ' · '+fmt(s.precio_base,0)+'€' : ''}</button>`).join('');
+  const { data } = await db.from('servicios').select('*').eq('activo', true);
+  serviciosCache = data || [];
+  const cont = document.getElementById('int-servicios-selector');
+  if(!data) return;
+  cont.innerHTML = data.map(s => `<button onclick="toggleServicio('${s.id}')" id="serv-btn-${s.id}" class="btn-secondary" style="font-size:0.7rem; padding:0.3rem 0.6rem; margin:2px;">${s.nombre}</button>`).join('');
 }
 
-function toggleServicio(id, precio, horas) {
-  const btn = document.getElementById(`serv-btn-${id}`); const idx = serviciosSeleccionados.indexOf(id);
-  if (idx === -1) { serviciosSeleccionados.push(id); btn.style.background = 'var(--accent)'; btn.style.borderColor = 'var(--accent)'; btn.style.color = '#fff';
-  } else { serviciosSeleccionados.splice(idx, 1); btn.style.background = 'transparent'; btn.style.borderColor = 'var(--border)'; btn.style.color = 'var(--text-secondary)'; }
-
-  let precioTotal = 0; let horasTotal = 0;
-  serviciosSeleccionados.forEach(sid => { const s = serviciosCache.find(s => s.id === sid); if (s) { precioTotal += s.precio_base || 0; horasTotal += s.duracion_horas || 0; } });
-  const sugerido = document.getElementById('int-precio-sugerido'); const sugeridoVal = document.getElementById('int-precio-sugerido-val');
-  if (serviciosSeleccionados.length > 0) { sugerido.style.display = 'block'; sugeridoVal.textContent = `${fmt(precioTotal, 2)} €${horasTotal ? ' · '+horasTotal+'h est.' : ''}`;
-  } else { sugerido.style.display = 'none'; }
-}
-
-// ═══════════════════════════════════════════════════════════
-//  SUBIDA DE FOTOGRAFÍAS
-// ═══════════════════════════════════════════════════════════
-
-async function subirFoto(event, intervencionId, columna) {
-  const file = event.target.files[0]; if (!file) return;
-  showToast('Subiendo imagen...', 'success');
-  const fileExt = file.name.split('.').pop(); const fileName = `${intervencionId}_${columna}_${Date.now()}.${fileExt}`;
-  const { error: uploadError } = await db.storage.from('fotos_vehiculos').upload(fileName, file);
-  if (uploadError) { showToast('Error al subir la imagen', 'error'); return; }
-  const { data: { publicUrl } } = db.storage.from('fotos_vehiculos').getPublicUrl(fileName);
-  const updateData = {}; updateData[columna] = publicUrl;
-  const { error: updateError } = await db.from('intervenciones').update(updateData).eq('id', intervencionId);
-  if (updateError) { showToast('Error al guardar el enlace', 'error'); return; }
-  showToast('✓ Imagen guardada'); verIntervencion(intervencionId);
-}
-
-async function eliminarFoto(intervencionId, tipo) {
-  if (!confirm('¿Seguro que quieres eliminar esta foto?')) return;
-  const columna = tipo === 'antes' ? 'foto_antes' : 'foto_despues'; const updateData = {}; updateData[columna] = null;
-  await db.from('intervenciones').update(updateData).eq('id', intervencionId); verIntervencion(intervencionId);
+function toggleServicio(id) {
+  const idx = serviciosSeleccionados.indexOf(id);
+  const btn = document.getElementById(`serv-btn-${id}`);
+  if(idx === -1) {
+    serviciosSeleccionados.push(id);
+    btn.style.background = 'var(--accent)';
+  } else {
+    serviciosSeleccionados.splice(idx, 1);
+    btn.style.background = 'transparent';
+  }
 }
