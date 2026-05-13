@@ -1,6 +1,6 @@
 // ═══════════════════════════════════════════════════════════
-//  DetailPro — app.js  (Paso 5)
-//  Auth + Almacén + Operaciones (EDICIÓN Y BORRADO) + Calidad + Fotos
+//  DetailPro — app.js  (Paso 6)
+//  Auth + Almacén + Operaciones + Calidad + Blueprint 4 Vistas
 // ═══════════════════════════════════════════════════════════
 
 const SUPABASE_URL = 'https://cshcvanmccdtdotfsrot.supabase.co';
@@ -76,7 +76,6 @@ function switchTab(modulo, tab) {
   document.getElementById(`tab-${modulo}-${tab}`).classList.add('active');
   event.target.classList.add('active');
 
-  // Si salimos del modo edición de intervención, limpiamos el formulario por seguridad
   if (modulo === 'operaciones' && tab === 'lista') {
     limpiarFormularioIntervencion();
   }
@@ -637,7 +636,6 @@ async function crearIntervencion() {
 async function eliminarIntervencion(id) {
   if (!confirm('¿Seguro que quieres eliminar esta intervención de forma permanente? El stock gastado se devolverá al almacén.')) return;
 
-  // Recuperar stock
   const { data: inv } = await db.from('intervenciones').select('productos_usados').eq('id', id).single();
   if (inv && inv.productos_usados) {
     for (const p of inv.productos_usados) {
@@ -650,14 +648,13 @@ async function eliminarIntervencion(id) {
     }
   }
 
-  // Eliminar intervención
   const { error } = await db.from('intervenciones').delete().eq('id', id);
   if (error) { showToast('Error al eliminar', 'error'); return; }
 
   cerrarModal('modal-intervencion');
   showToast('✓ Intervención eliminada y stock restaurado');
   cargarIntervenciones();
-  cargarProductos(); // Actualizar interfaz del almacén por debajo
+  cargarProductos(); 
 }
 
 
@@ -732,29 +729,16 @@ async function verIntervencion(id) {
             <span style="color:var(--text-secondary);">Coste total materiales</span><span class="highlight">${fmt(costeMateriales,4)} €</span>
           </div>
         </div>` : ''}
+      
       ${inv.mapa_danos && inv.mapa_danos.length > 0 ? `
         <div>
           <div style="font-size:0.72rem;font-weight:600;letter-spacing:0.09em;text-transform:uppercase;color:var(--text-secondary);margin-bottom:0.5rem;">Mapa de Daños</div>
           <div style="background:var(--bg-input);border:1px solid var(--border);border-radius:0.4rem;overflow:hidden;position:relative;">
-            <svg viewBox="0 0 500 220" xmlns="http://www.w3.org/2000/svg" style="width:100%;display:block;">
-              <rect x="60" y="70" width="380" height="100" rx="18" fill="#222" stroke="#444" stroke-width="1.5"/>
-              <rect x="140" y="45" width="200" height="75" rx="14" fill="#2a2a2a" stroke="#444" stroke-width="1.5"/>
-              <path d="M148,48 L340,48 L325,95 L163,95 Z" fill="#1a1a2e" stroke="#555" stroke-width="1"/>
-              <path d="M163,95 L325,95 L318,118 L170,118 Z" fill="#1a1a2e" stroke="#555" stroke-width="1" opacity="0.6"/>
-              <ellipse cx="135" cy="175" rx="30" ry="14" fill="#111" stroke="#555" stroke-width="2"/>
-              <ellipse cx="135" cy="175" rx="18" ry="8" fill="#1a1a1a" stroke="#666" stroke-width="1"/>
-              <ellipse cx="365" cy="175" rx="30" ry="14" fill="#111" stroke="#555" stroke-width="2"/>
-              <ellipse cx="365" cy="175" rx="18" ry="8" fill="#1a1a1a" stroke="#666" stroke-width="1"/>
-              <ellipse cx="135" cy="55" rx="30" ry="14" fill="#111" stroke="#555" stroke-width="2"/>
-              <ellipse cx="135" cy="55" rx="18" ry="8" fill="#1a1a1a" stroke="#666" stroke-width="1"/>
-              <ellipse cx="365" cy="55" rx="30" ry="14" fill="#111" stroke="#555" stroke-width="2"/>
-              <ellipse cx="365" cy="55" rx="18" ry="8" fill="#1a1a1a" stroke="#666" stroke-width="1"/>
-              <rect x="62" y="78" width="28" height="20" rx="4" fill="#1a1a2e" stroke="#f97316" stroke-width="1"/>
-              <rect x="410" y="78" width="28" height="20" rx="4" fill="#1a1a2e" stroke="#ef4444" stroke-width="1"/>
-              <rect x="62" y="132" width="28" height="20" rx="4" fill="#1a1a2e" stroke="#f97316" stroke-width="1"/>
-              <rect x="410" y="132" width="28" height="20" rx="4" fill="#1a1a2e" stroke="#ef4444" stroke-width="1"/>
-              <text x="38" y="118" font-size="9" fill="#555" text-anchor="middle" font-family="sans-serif">DEL</text>
-              <text x="462" y="118" font-size="9" fill="#555" text-anchor="middle" font-family="sans-serif">TRA</text>
+            <svg viewBox="0 0 600 300" xmlns="http://www.w3.org/2000/svg" style="width:100%;display:block;background:#1a1a2e;">
+              <g transform="translate(30, 100)"><text x="85" y="-20" font-size="10" fill="#7a8fa8" font-weight="bold" text-anchor="middle" letter-spacing="1">SUPERIOR</text><rect x="0" y="0" width="170" height="75" rx="16" fill="#222" stroke="#444" stroke-width="1.5"/><rect x="40" y="5" width="90" height="65" rx="10" fill="#2a2a2a" stroke="#444" stroke-width="1"/><path d="M 50 5 L 120 5 L 110 70 L 60 70 Z" fill="#111"/></g>
+              <g transform="translate(280, 40)"><text x="120" y="-15" font-size="10" fill="#7a8fa8" font-weight="bold" text-anchor="middle" letter-spacing="1">LATERAL</text><path d="M 20 70 L 40 35 L 85 15 L 160 15 L 200 35 L 220 70 Z" fill="#222" stroke="#444" stroke-width="1.5"/><circle cx="65" cy="70" r="18" fill="#111" stroke="#555" stroke-width="1.5"/><circle cx="185" cy="70" r="18" fill="#111" stroke="#555" stroke-width="1.5"/><path d="M 85 20 L 155 20 L 175 35 L 90 35 Z" fill="#111" /><path d="M 45 35 L 80 20 L 80 35 Z" fill="#111" /><line x1="85" y1="35" x2="85" y2="70" stroke="#444" stroke-width="1"/><line x1="155" y1="35" x2="155" y2="70" stroke="#444" stroke-width="1"/></g>
+              <g transform="translate(260, 180)"><text x="50" y="-15" font-size="10" fill="#7a8fa8" font-weight="bold" text-anchor="middle" letter-spacing="1">FRONTAL</text><path d="M 10 60 L 15 25 L 30 5 L 70 5 L 85 25 L 90 60 Z" fill="#222" stroke="#444" stroke-width="1.5"/><path d="M 20 25 L 80 25 L 65 10 L 35 10 Z" fill="#111"/><rect x="30" y="40" width="40" height="12" rx="2" fill="#111" stroke="#333"/><ellipse cx="20" cy="35" rx="8" ry="5" fill="#fff" opacity="0.6"/><ellipse cx="80" cy="35" rx="8" ry="5" fill="#fff" opacity="0.6"/><rect x="5" y="55" width="14" height="15" rx="2" fill="#111"/><rect x="81" y="55" width="14" height="15" rx="2" fill="#111"/></g>
+              <g transform="translate(420, 180)"><text x="50" y="-15" font-size="10" fill="#7a8fa8" font-weight="bold" text-anchor="middle" letter-spacing="1">TRASERA</text><path d="M 10 60 L 15 25 L 30 5 L 70 5 L 85 25 L 90 60 Z" fill="#222" stroke="#444" stroke-width="1.5"/><path d="M 20 25 L 80 25 L 65 10 L 35 10 Z" fill="#111"/><rect x="35" y="45" width="30" height="10" rx="1" fill="#111" stroke="#f97316"/><ellipse cx="20" cy="35" rx="8" ry="5" fill="#ef4444" opacity="0.7"/><ellipse cx="80" cy="35" rx="8" ry="5" fill="#ef4444" opacity="0.7"/><rect x="5" y="55" width="14" height="15" rx="2" fill="#111"/><rect x="81" y="55" width="14" height="15" rx="2" fill="#111"/></g>
               ${inv.mapa_danos.map(d => {
                 const colors = { rayazo:'#ef4444', abollon:'#f59e0b', oxidacion:'#8b5cf6', otro:'#6b7280' };
                 const strokes = { rayazo:'#fca5a5', abollon:'#fcd34d', oxidacion:'#c4b5fd', otro:'#9ca3af' };
