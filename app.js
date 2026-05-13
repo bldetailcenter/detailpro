@@ -1,6 +1,6 @@
 // ═══════════════════════════════════════════════════════════
-//  DetailPro — app.js  (Paso 4)
-//  Auth + Almacén + Operaciones (EDICIÓN) + Calidad + Fotos
+//  DetailPro — app.js  (Paso 5)
+//  Auth + Almacén + Operaciones (EDICIÓN Y BORRADO) + Calidad + Fotos
 // ═══════════════════════════════════════════════════════════
 
 const SUPABASE_URL = 'https://cshcvanmccdtdotfsrot.supabase.co';
@@ -438,7 +438,7 @@ async function cargarHistorial() {
 
 
 // ═══════════════════════════════════════════════════════════
-//  MÓDULO OPERACIONES (CREACIÓN Y EDICIÓN)
+//  MÓDULO OPERACIONES (CREACIÓN, EDICIÓN Y BORRADO)
 // ═══════════════════════════════════════════════════════════
 
 function addProductoUsado() {
@@ -483,11 +483,9 @@ async function prepararEdicion(id) {
   const { data: inv } = await db.from('intervenciones').select('*').eq('id', id).single();
   if(!inv) return;
 
-  // Activar modo edición
   intervencionEditando = id;
   productosEditandoStock = inv.productos_usados || [];
 
-  // 1. Textos básicos
   document.getElementById('int-matricula').value = inv.matricula || '';
   document.getElementById('int-cliente').value = inv.cliente_nombre || '';
   document.getElementById('int-horas').value = inv.horas_reales || '';
@@ -495,7 +493,6 @@ async function prepararEdicion(id) {
   document.getElementById('int-incidentes').value = inv.incidentes || '';
   document.getElementById('int-estado').value = inv.estado || 'abierta';
 
-  // 2. Servicios
   serviciosSeleccionados = [];
   document.querySelectorAll('[id^="serv-btn-"]').forEach(b => {
     b.style.background='transparent'; b.style.color='var(--text-secondary)'; b.style.borderColor='var(--border)';
@@ -509,7 +506,6 @@ async function prepararEdicion(id) {
      document.getElementById('int-precio-sugerido').style.display = 'none';
   }
 
-  // 3. Productos
   document.getElementById('productos-usados-container').innerHTML = '';
   productoUsadoCount = 0;
   if(inv.productos_usados) {
@@ -521,7 +517,6 @@ async function prepararEdicion(id) {
     });
   }
 
-  // 4. Mapa de Daños
   limpiarMapa();
   if(inv.mapa_danos) {
     inv.mapa_danos.forEach(d => {
@@ -549,7 +544,6 @@ async function prepararEdicion(id) {
     renderDanosList();
   }
 
-  // 5. Cambiar el botón principal
   const btn = document.querySelector('[onclick="crearIntervencion()"]');
   if(btn) { btn.innerHTML = '💾 Actualizar Intervención'; btn.style.background = '#22c55e'; }
 
@@ -593,8 +587,6 @@ async function crearIntervencion() {
   if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>'; }
 
   if (intervencionEditando) {
-    // ---- MODO EDICIÓN ----
-    // 1. Devolver el stock de los productos antiguos al almacén
     for (const old of productosEditandoStock) {
       const prod = productosCache.find(p => p.id === old.id);
       if(prod) {
@@ -604,7 +596,6 @@ async function crearIntervencion() {
       }
     }
 
-    // 2. Actualizar la base de datos
     const { error } = await db.from('intervenciones').update({
       matricula, cliente_nombre: cliente, horas_reales: horas, precio_cobrado: precio,
       productos_usados: productosUsados.length ? productosUsados : null,
@@ -616,7 +607,6 @@ async function crearIntervencion() {
     showToast('✓ Intervención actualizada correctamente');
 
   } else {
-    // ---- MODO CREACIÓN NORMAL ----
     const { error } = await db.from('intervenciones').insert([{
       matricula, cliente_nombre: cliente, servicio_id: null, horas_reales: horas, precio_cobrado: precio,
       productos_usados: productosUsados.length ? productosUsados : null,
@@ -628,7 +618,6 @@ async function crearIntervencion() {
     showToast('✓ Intervención guardada');
   }
 
-  // 3. Descontar el stock de los productos (sirve tanto para Creación como para Edición)
   for (const pu of productosUsados) {
     const prod = productosCache.find(p => p.id === pu.id);
     if (!prod) continue;
@@ -638,11 +627,37 @@ async function crearIntervencion() {
   }
   if (productosUsados.length > 0) cargarProductos(); 
 
-  // 4. Limpiar todo y volver a la lista
   if (btn) { btn.disabled = false; btn.textContent = 'Guardar Intervención'; }
   limpiarFormularioIntervencion();
   switchTabDirect('operaciones', 'lista');
   cargarIntervenciones();
+}
+
+
+async function eliminarIntervencion(id) {
+  if (!confirm('¿Seguro que quieres eliminar esta intervención de forma permanente? El stock gastado se devolverá al almacén.')) return;
+
+  // Recuperar stock
+  const { data: inv } = await db.from('intervenciones').select('productos_usados').eq('id', id).single();
+  if (inv && inv.productos_usados) {
+    for (const p of inv.productos_usados) {
+      const prod = productosCache.find(x => x.id === p.id);
+      if (prod) {
+        const nuevoStock = (prod.stock_actual || 0) + p.ml_usados;
+        await db.from('productos').update({ stock_actual: nuevoStock }).eq('id', p.id);
+        prod.stock_actual = nuevoStock;
+      }
+    }
+  }
+
+  // Eliminar intervención
+  const { error } = await db.from('intervenciones').delete().eq('id', id);
+  if (error) { showToast('Error al eliminar', 'error'); return; }
+
+  cerrarModal('modal-intervencion');
+  showToast('✓ Intervención eliminada y stock restaurado');
+  cargarIntervenciones();
+  cargarProductos(); // Actualizar interfaz del almacén por debajo
 }
 
 
@@ -794,6 +809,7 @@ async function verIntervencion(id) {
       <div style="display:flex;gap:0.5rem;margin-top:0.25rem;">
         <button class="btn-secondary" onclick="cerrarModal('modal-intervencion')">Cerrar</button>
         <button class="btn-secondary" onclick="prepararEdicion('${inv.id}')" style="color:var(--accent);border-color:var(--accent);">✏️ Editar</button>
+        <button class="btn-secondary" onclick="eliminarIntervencion('${inv.id}')" style="color:#ef4444;border-color:#ef4444;width:40px;">🗑️</button>
         <button class="btn-action" onclick="cambiarEstado('${inv.id}', '${inv.estado}')" style="flex:1;">Cambiar Estado</button>
       </div>
     </div>
