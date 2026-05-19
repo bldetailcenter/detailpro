@@ -495,61 +495,114 @@
 
           <hr class="divider" />
 
-          <!-- MAPA DE DAÑOS -->
-          <div style="font-family:'Barlow Condensed',sans-serif;font-size:1rem;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:var(--text-secondary);margin-bottom:0.5rem;">🗺️ Mapa de Daños</div>
-          <p style="font-size:0.8rem;color:var(--text-muted);margin-bottom:0.75rem;">Toca sobre el vehículo para marcar zonas dañadas. Toca de nuevo para eliminar.</p>
+          <!-- MAPA DE DAÑOS — 4 VISTAS -->
+          <div style="font-family:'Barlow Condensed',sans-serif;font-size:1rem;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:var(--text-secondary);margin-bottom:0.4rem;">🗺️ Mapa de Daños</div>
+          <p style="font-size:0.8rem;color:var(--text-muted);margin-bottom:0.75rem;">Selecciona el tipo de daño, elige la vista y toca la zona afectada.</p>
 
-          <div style="display:flex;gap:0.5rem;margin-bottom:0.75rem;flex-wrap:wrap;">
-            <button class="damage-type-btn active" data-type="rayazo" onclick="selectDamageType(this)" style="padding:0.3rem 0.75rem;border-radius:99px;font-size:0.75rem;font-weight:600;border:1px solid #ef4444;background:rgba(239,68,68,0.15);color:#fca5a5;cursor:pointer;">● Rayazo</button>
-            <button class="damage-type-btn" data-type="abollon" onclick="selectDamageType(this)" style="padding:0.3rem 0.75rem;border-radius:99px;font-size:0.75rem;font-weight:600;border:1px solid #f59e0b;background:rgba(245,158,11,0.15);color:#fcd34d;cursor:pointer;">● Abollón</button>
-            <button class="damage-type-btn" data-type="oxidacion" onclick="selectDamageType(this)" style="padding:0.3rem 0.75rem;border-radius:99px;font-size:0.75rem;font-weight:600;border:1px solid #8b5cf6;background:rgba(139,92,246,0.15);color:#c4b5fd;cursor:pointer;">● Oxidación</button>
-            <button class="damage-type-btn" data-type="otro" onclick="selectDamageType(this)" style="padding:0.3rem 0.75rem;border-radius:99px;font-size:0.75rem;font-weight:600;border:1px solid var(--border);background:rgba(255,255,255,0.05);color:var(--text-secondary);cursor:pointer;">● Otro</button>
+          <div style="display:flex;gap:0.4rem;margin-bottom:0.65rem;flex-wrap:wrap;">
+            <button class="damage-type-btn active" data-type="rayazo" onclick="selectDamageType(this)" style="padding:0.3rem 0.75rem;border-radius:99px;font-size:0.75rem;font-weight:600;border:1px solid #ef4444;background:rgba(239,68,68,0.2);color:#fca5a5;cursor:pointer;opacity:1;">● Rayazo</button>
+            <button class="damage-type-btn" data-type="abollon" onclick="selectDamageType(this)" style="padding:0.3rem 0.75rem;border-radius:99px;font-size:0.75rem;font-weight:600;border:1px solid #f59e0b;background:rgba(245,158,11,0.1);color:#fcd34d;cursor:pointer;opacity:0.5;">● Abollón</button>
+            <button class="damage-type-btn" data-type="oxidacion" onclick="selectDamageType(this)" style="padding:0.3rem 0.75rem;border-radius:99px;font-size:0.75rem;font-weight:600;border:1px solid #8b5cf6;background:rgba(139,92,246,0.1);color:#c4b5fd;cursor:pointer;opacity:0.5;">● Oxidación</button>
+            <button class="damage-type-btn" data-type="otro" onclick="selectDamageType(this)" style="padding:0.3rem 0.75rem;border-radius:99px;font-size:0.75rem;font-weight:600;border:1px solid var(--border);background:rgba(255,255,255,0.05);color:var(--text-secondary);cursor:pointer;opacity:0.5;">● Otro</button>
             <button onclick="limpiarMapa()" style="padding:0.3rem 0.75rem;border-radius:99px;font-size:0.75rem;font-weight:600;border:1px solid var(--border);background:transparent;color:var(--text-muted);cursor:pointer;margin-left:auto;">🗑 Limpiar</button>
           </div>
 
-          <div style="position:relative;background:var(--bg-input);border:1px solid var(--border);border-radius:0.5rem;overflow:hidden;touch-action:none;" id="mapa-container">
-            <svg id="mapa-danos" viewBox="0 0 600 300" xmlns="http://www.w3.org/2000/svg" style="width:100%; display:block; cursor:crosshair; background:#1a1a2e; border-radius:0.4rem;" onclick="addDamagePoint(event)">
-              <g transform="translate(30, 100)">
-                <text x="85" y="-20" font-size="10" fill="#7a8fa8" font-weight="bold" text-anchor="middle" letter-spacing="1">SUPERIOR</text>
-                <rect x="0" y="0" width="170" height="75" rx="16" fill="#222" stroke="#444" stroke-width="1.5"/>
-                <rect x="40" y="5" width="90" height="65" rx="10" fill="#2a2a2a" stroke="#444" stroke-width="1"/>
-                <path d="M 50 5 L 120 5 L 110 70 L 60 70 Z" fill="#111"/> 
-              </g>
-        
-              <g transform="translate(280, 40)">
-                <text x="120" y="-15" font-size="10" fill="#7a8fa8" font-weight="bold" text-anchor="middle" letter-spacing="1">LATERAL</text>
-                <path d="M 20 70 L 40 35 L 85 15 L 160 15 L 200 35 L 220 70 Z" fill="#222" stroke="#444" stroke-width="1.5"/>
-                <circle cx="65" cy="70" r="18" fill="#111" stroke="#555" stroke-width="1.5"/>
-                <circle cx="185" cy="70" r="18" fill="#111" stroke="#555" stroke-width="1.5"/>
-                <path d="M 85 20 L 155 20 L 175 35 L 90 35 Z" fill="#111" />
-                <path d="M 45 35 L 80 20 L 80 35 Z" fill="#111" />
-                <line x1="85" y1="35" x2="85" y2="70" stroke="#444" stroke-width="1"/>
-                <line x1="155" y1="35" x2="155" y2="70" stroke="#444" stroke-width="1"/>
-              </g>
-        
-              <g transform="translate(260, 180)">
-                <text x="50" y="-15" font-size="10" fill="#7a8fa8" font-weight="bold" text-anchor="middle" letter-spacing="1">FRONTAL</text>
-                <path d="M 10 60 L 15 25 L 30 5 L 70 5 L 85 25 L 90 60 Z" fill="#222" stroke="#444" stroke-width="1.5"/>
-                <path d="M 20 25 L 80 25 L 65 10 L 35 10 Z" fill="#111"/> 
-                <rect x="30" y="40" width="40" height="12" rx="2" fill="#111" stroke="#333"/>
-                <ellipse cx="20" cy="35" rx="8" ry="5" fill="#fff" opacity="0.6"/>
-                <ellipse cx="80" cy="35" rx="8" ry="5" fill="#fff" opacity="0.6"/>
-                <rect x="5" y="55" width="14" height="15" rx="2" fill="#111"/>
-                <rect x="81" y="55" width="14" height="15" rx="2" fill="#111"/>
-              </g>
-        
-              <g transform="translate(420, 180)">
-                <text x="50" y="-15" font-size="10" fill="#7a8fa8" font-weight="bold" text-anchor="middle" letter-spacing="1">TRASERA</text>
-                <path d="M 10 60 L 15 25 L 30 5 L 70 5 L 85 25 L 90 60 Z" fill="#222" stroke="#444" stroke-width="1.5"/>
-                <path d="M 20 25 L 80 25 L 65 10 L 35 10 Z" fill="#111"/> 
-                <rect x="35" y="45" width="30" height="10" rx="1" fill="#111" stroke="#f97316"/>
-                <ellipse cx="20" cy="35" rx="8" ry="5" fill="#ef4444" opacity="0.7"/>
-                <ellipse cx="80" cy="35" rx="8" ry="5" fill="#ef4444" opacity="0.7"/>
-                <rect x="5" y="55" width="14" height="15" rx="2" fill="#111"/>
-                <rect x="81" y="55" width="14" height="15" rx="2" fill="#111"/>
-              </g>
-              
-              <g id="damage-points"></g>
+          <div style="display:flex;gap:0.2rem;margin-bottom:0.5rem;background:var(--bg-input);border-radius:0.5rem;padding:0.2rem;">
+            <button class="vista-btn active" onclick="cambiarVista('frontal',this)" style="flex:1;padding:0.4rem 0.2rem;border:none;border-radius:0.35rem;background:var(--accent);color:#fff;font-size:0.7rem;font-weight:700;cursor:pointer;">FRONTAL</button>
+            <button class="vista-btn" onclick="cambiarVista('trasera',this)" style="flex:1;padding:0.4rem 0.2rem;border:none;border-radius:0.35rem;background:transparent;color:var(--text-muted);font-size:0.7rem;font-weight:700;cursor:pointer;">TRASERA</button>
+            <button class="vista-btn" onclick="cambiarVista('lateral-izq',this)" style="flex:1;padding:0.4rem 0.2rem;border:none;border-radius:0.35rem;background:transparent;color:var(--text-muted);font-size:0.7rem;font-weight:700;cursor:pointer;">LAT. IZQ</button>
+            <button class="vista-btn" onclick="cambiarVista('lateral-der',this)" style="flex:1;padding:0.4rem 0.2rem;border:none;border-radius:0.35rem;background:transparent;color:var(--text-muted);font-size:0.7rem;font-weight:700;cursor:pointer;">LAT. DER</button>
+          </div>
+
+          <div style="background:var(--bg-input);border:1px solid var(--border);border-radius:0.5rem;overflow:hidden;">
+            <svg id="vista-frontal" class="vista-svg" data-vista="frontal" viewBox="0 0 300 190" xmlns="http://www.w3.org/2000/svg" style="width:100%;display:block;cursor:crosshair;" onclick="addDamagePoint(event)">
+              <rect x="40" y="55" width="220" height="115" rx="12" fill="#1e2030" stroke="#2a3550" stroke-width="2"/>
+              <path d="M78,55 L222,55 L242,25 L58,25 Z" fill="#1a2035" stroke="#2a3550" stroke-width="2"/>
+              <path d="M82,53 L218,53 L234,27 L66,27 Z" fill="#0d1525" stroke="#3b82f6" stroke-width="1.5" opacity="0.85"/>
+              <path d="M40,95 L260,95 L255,55 L45,55 Z" fill="#192030" stroke="#2a3550" stroke-width="1.5"/>
+              <path d="M42,68 L95,68 L95,92 L42,90 Z" fill="#1a2540" stroke="#3b82f6" stroke-width="1.5"/>
+              <ellipse cx="68" cy="80" rx="18" ry="9" fill="#0d1525" stroke="#3b82f6" stroke-width="1" opacity="0.6"/>
+              <path d="M258,68 L205,68 L205,92 L258,90 Z" fill="#1a2540" stroke="#3b82f6" stroke-width="1.5"/>
+              <ellipse cx="232" cy="80" rx="18" ry="9" fill="#0d1525" stroke="#3b82f6" stroke-width="1" opacity="0.6"/>
+              <rect x="98" y="125" width="104" height="26" rx="4" fill="#111827" stroke="#2a3550" stroke-width="1.5"/>
+              <line x1="118" y1="125" x2="118" y2="151" stroke="#2a3550" stroke-width="1"/><line x1="138" y1="125" x2="138" y2="151" stroke="#2a3550" stroke-width="1"/>
+              <line x1="158" y1="125" x2="158" y2="151" stroke="#2a3550" stroke-width="1"/><line x1="178" y1="125" x2="178" y2="151" stroke="#2a3550" stroke-width="1"/>
+              <line x1="98" y1="138" x2="202" y2="138" stroke="#2a3550" stroke-width="1"/>
+              <rect x="112" y="153" width="76" height="16" rx="2" fill="#1e2a40" stroke="#3b82f6" stroke-width="1"/>
+              <path d="M40,151 Q40,165 52,167 L248,167 Q260,165 260,151 Z" fill="#192030" stroke="#2a3550" stroke-width="1.5"/>
+              <ellipse cx="74" cy="178" rx="26" ry="10" fill="#111" stroke="#3b82f6" stroke-width="1.5"/>
+              <ellipse cx="74" cy="178" rx="15" ry="6" fill="#0d1525" stroke="#2a3550" stroke-width="1"/>
+              <ellipse cx="226" cy="178" rx="26" ry="10" fill="#111" stroke="#3b82f6" stroke-width="1.5"/>
+              <ellipse cx="226" cy="178" rx="15" ry="6" fill="#0d1525" stroke="#2a3550" stroke-width="1"/>
+              <text x="150" y="13" font-size="8" fill="#3b82f6" text-anchor="middle" font-family="sans-serif" font-weight="bold" opacity="0.8">◀ FRONTAL ▶</text>
+              <g id="damage-points-frontal"></g>
+            </svg>
+            <svg id="vista-trasera" class="vista-svg" data-vista="trasera" viewBox="0 0 300 190" xmlns="http://www.w3.org/2000/svg" style="width:100%;display:none;cursor:crosshair;" onclick="addDamagePoint(event)">
+              <rect x="40" y="55" width="220" height="115" rx="12" fill="#1e2030" stroke="#2a3550" stroke-width="2"/>
+              <path d="M78,55 L222,55 L242,25 L58,25 Z" fill="#1a2035" stroke="#2a3550" stroke-width="2"/>
+              <path d="M82,53 L218,53 L230,29 L70,29 Z" fill="#0d1525" stroke="#2a3550" stroke-width="1.5" opacity="0.5"/>
+              <path d="M42,63 L102,63 L102,96 L42,94 Z" fill="#2d0f0f" stroke="#ef4444" stroke-width="1.5"/>
+              <ellipse cx="72" cy="80" rx="20" ry="10" fill="#1a0808" stroke="#ef4444" stroke-width="1" opacity="0.7"/>
+              <path d="M258,63 L198,63 L198,96 L258,94 Z" fill="#2d0f0f" stroke="#ef4444" stroke-width="1.5"/>
+              <ellipse cx="228" cy="80" rx="20" ry="10" fill="#1a0808" stroke="#ef4444" stroke-width="1" opacity="0.7"/>
+              <rect x="58" y="98" width="184" height="36" rx="4" fill="#192030" stroke="#2a3550" stroke-width="1.5"/>
+              <rect x="122" y="110" width="56" height="8" rx="4" fill="#111827" stroke="#2a3550" stroke-width="1"/>
+              <rect x="110" y="146" width="80" height="16" rx="2" fill="#1e2a40" stroke="#ef4444" stroke-width="1"/>
+              <path d="M40,155 Q40,168 52,170 L248,170 Q260,168 260,155 Z" fill="#192030" stroke="#2a3550" stroke-width="1.5"/>
+              <ellipse cx="74" cy="182" rx="26" ry="10" fill="#111" stroke="#ef4444" stroke-width="1.5"/>
+              <ellipse cx="74" cy="182" rx="15" ry="6" fill="#0d1525" stroke="#2a3550" stroke-width="1"/>
+              <ellipse cx="226" cy="182" rx="26" ry="10" fill="#111" stroke="#ef4444" stroke-width="1.5"/>
+              <ellipse cx="226" cy="182" rx="15" ry="6" fill="#0d1525" stroke="#2a3550" stroke-width="1"/>
+              <text x="150" y="13" font-size="8" fill="#ef4444" text-anchor="middle" font-family="sans-serif" font-weight="bold" opacity="0.8">◀ TRASERA ▶</text>
+              <g id="damage-points-trasera"></g>
+            </svg>
+            <svg id="vista-lateral-izq" class="vista-svg" data-vista="lateral-izq" viewBox="0 0 400 175" xmlns="http://www.w3.org/2000/svg" style="width:100%;display:none;cursor:crosshair;" onclick="addDamagePoint(event)">
+              <path d="M28,118 L28,78 Q30,62 55,57 L118,43 L178,33 L258,33 L308,43 L353,57 Q372,65 373,78 L373,118 Z" fill="#1e2030" stroke="#2a3550" stroke-width="2"/>
+              <path d="M118,43 L178,33 L258,33 L308,43 L288,38 L138,38 Z" fill="#1a2035" stroke="#2a3550" stroke-width="1"/>
+              <path d="M123,42 L178,34 L178,68 L118,68 Z" fill="#0d1525" stroke="#3b82f6" stroke-width="1.5" opacity="0.85"/>
+              <rect x="183" y="34" width="62" height="34" fill="#0d1525" stroke="#2a3550" stroke-width="1.5" opacity="0.7"/>
+              <path d="M250,34 L303,42 L303,68 L250,68 Z" fill="#0d1525" stroke="#2a3550" stroke-width="1.5" opacity="0.55"/>
+              <path d="M30,73 L30,95 L73,90 L78,70 Z" fill="#1a2540" stroke="#3b82f6" stroke-width="1.5"/>
+              <path d="M366,70 L371,93 L328,90 L323,70 Z" fill="#2d0f0f" stroke="#ef4444" stroke-width="1.5"/>
+              <rect x="118" y="68" width="118" height="50" rx="2" fill="#192030" stroke="#2a3550" stroke-width="1"/>
+              <rect x="210" y="80" width="14" height="5" rx="2" fill="#2a3550"/>
+              <rect x="242" y="68" width="72" height="50" rx="2" fill="#192030" stroke="#2a3550" stroke-width="1"/>
+              <rect x="287" y="80" width="14" height="5" rx="2" fill="#2a3550"/>
+              <path d="M78,70 L118,58 L118,118 L28,118 L28,95 L73,90 Z" fill="#192030" stroke="#2a3550" stroke-width="1"/>
+              <path d="M318,58 L368,70 L371,118 L318,118 Z" fill="#192030" stroke="#2a3550" stroke-width="1"/>
+              <circle cx="93" cy="136" r="30" fill="#111" stroke="#3b82f6" stroke-width="2"/>
+              <circle cx="93" cy="136" r="18" fill="#0d1525" stroke="#2a3550" stroke-width="1.5"/>
+              <circle cx="93" cy="136" r="7" fill="#111" stroke="#2a3550" stroke-width="1"/>
+              <circle cx="303" cy="136" r="30" fill="#111" stroke="#3b82f6" stroke-width="2"/>
+              <circle cx="303" cy="136" r="18" fill="#0d1525" stroke="#2a3550" stroke-width="1.5"/>
+              <circle cx="303" cy="136" r="7" fill="#111" stroke="#2a3550" stroke-width="1"/>
+              <path d="M28,118 L373,118 L368,128 L33,128 Z" fill="#111827" stroke="#2a3550" stroke-width="1"/>
+              <text x="200" y="13" font-size="8" fill="#22c55e" text-anchor="middle" font-family="sans-serif" font-weight="bold" opacity="0.8">◀ LATERAL IZQUIERDO ▶</text>
+              <g id="damage-points-lateral-izq"></g>
+            </svg>
+            <svg id="vista-lateral-der" class="vista-svg" data-vista="lateral-der" viewBox="0 0 400 175" xmlns="http://www.w3.org/2000/svg" style="width:100%;display:none;cursor:crosshair;" onclick="addDamagePoint(event)">
+              <path d="M28,118 L28,78 Q30,62 55,57 L118,43 L178,33 L258,33 L308,43 L353,57 Q372,65 373,78 L373,118 Z" fill="#1e2030" stroke="#2a3550" stroke-width="2"/>
+              <path d="M118,43 L178,33 L258,33 L308,43 L288,38 L138,38 Z" fill="#1a2035" stroke="#2a3550" stroke-width="1"/>
+              <path d="M277,42 L322,34 L322,68 L277,68 Z" fill="#0d1525" stroke="#3b82f6" stroke-width="1.5" opacity="0.85"/>
+              <rect x="155" y="34" width="62" height="34" fill="#0d1525" stroke="#2a3550" stroke-width="1.5" opacity="0.7"/>
+              <path d="M97,34 L150,42 L150,68 L97,68 Z" fill="#0d1525" stroke="#2a3550" stroke-width="1.5" opacity="0.55"/>
+              <path d="M366,73 L371,95 L328,90 L323,72 Z" fill="#1a2540" stroke="#3b82f6" stroke-width="1.5"/>
+              <path d="M30,70 L35,93 L78,90 L77,70 Z" fill="#2d0f0f" stroke="#ef4444" stroke-width="1.5"/>
+              <rect x="160" y="68" width="118" height="50" rx="2" fill="#192030" stroke="#2a3550" stroke-width="1"/>
+              <rect x="166" y="80" width="14" height="5" rx="2" fill="#2a3550"/>
+              <rect x="86" y="68" width="72" height="50" rx="2" fill="#192030" stroke="#2a3550" stroke-width="1"/>
+              <rect x="95" y="80" width="14" height="5" rx="2" fill="#2a3550"/>
+              <path d="M322,58 L373,70 L373,118 L322,118 Z" fill="#192030" stroke="#2a3550" stroke-width="1"/>
+              <path d="M82,70 L28,95 L28,118 L82,118 Z" fill="#192030" stroke="#2a3550" stroke-width="1"/>
+              <circle cx="93" cy="136" r="30" fill="#111" stroke="#3b82f6" stroke-width="2"/>
+              <circle cx="93" cy="136" r="18" fill="#0d1525" stroke="#2a3550" stroke-width="1.5"/>
+              <circle cx="93" cy="136" r="7" fill="#111" stroke="#2a3550" stroke-width="1"/>
+              <circle cx="303" cy="136" r="30" fill="#111" stroke="#3b82f6" stroke-width="2"/>
+              <circle cx="303" cy="136" r="18" fill="#0d1525" stroke="#2a3550" stroke-width="1.5"/>
+              <circle cx="303" cy="136" r="7" fill="#111" stroke="#2a3550" stroke-width="1"/>
+              <path d="M28,118 L373,118 L368,128 L33,128 Z" fill="#111827" stroke="#2a3550" stroke-width="1"/>
+              <text x="200" y="13" font-size="8" fill="#f59e0b" text-anchor="middle" font-family="sans-serif" font-weight="bold" opacity="0.8">◀ LATERAL DERECHO ▶</text>
+              <g id="damage-points-lateral-der"></g>
             </svg>
           </div>
 
