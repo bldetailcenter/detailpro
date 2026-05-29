@@ -455,6 +455,14 @@
 
       <!-- Lista -->
       <div class="tab-panel active" id="tab-operaciones-lista">
+        <!-- Filtros -->
+        <div style="display:flex;gap:0.35rem;margin-bottom:1rem;flex-wrap:wrap;">
+          <button class="filtro-btn active" data-filtro="todos" onclick="filtrarIntervenciones('todos',this)" style="padding:0.3rem 0.85rem;border-radius:99px;font-size:0.78rem;font-weight:600;border:1px solid var(--accent);background:var(--accent);color:#fff;cursor:pointer;transition:all 0.15s;">Todas</button>
+          <button class="filtro-btn" data-filtro="abierta" onclick="filtrarIntervenciones('abierta',this)" style="padding:0.3rem 0.85rem;border-radius:99px;font-size:0.78rem;font-weight:600;border:1px solid var(--border);background:transparent;color:var(--text-muted);cursor:pointer;transition:all 0.15s;">Abiertas</button>
+          <button class="filtro-btn" data-filtro="en_proceso" onclick="filtrarIntervenciones('en_proceso',this)" style="padding:0.3rem 0.85rem;border-radius:99px;font-size:0.78rem;font-weight:600;border:1px solid var(--border);background:transparent;color:var(--text-muted);cursor:pointer;transition:all 0.15s;">En Proceso</button>
+          <button class="filtro-btn" data-filtro="finalizada" onclick="filtrarIntervenciones('finalizada',this)" style="padding:0.3rem 0.85rem;border-radius:99px;font-size:0.78rem;font-weight:600;border:1px solid var(--border);background:transparent;color:var(--text-muted);cursor:pointer;transition:all 0.15s;">Finalizadas</button>
+          <button class="filtro-btn" data-filtro="entregada" onclick="filtrarIntervenciones('entregada',this)" style="padding:0.3rem 0.85rem;border-radius:99px;font-size:0.78rem;font-weight:600;border:1px solid var(--border);background:transparent;color:var(--text-muted);cursor:pointer;transition:all 0.15s;">Entregadas</button>
+        </div>
         <div id="intervenciones-loading" style="text-align:center;padding:2rem;color:var(--text-muted);"><div class="spinner"></div></div>
         <div id="intervenciones-container"></div>
         <div id="intervenciones-empty" class="empty-state" style="display:none;">
