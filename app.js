@@ -999,3 +999,75 @@ async function cargarGrafica() {
     }
   });
 }
+
+// ═══════════════════════════════════════════════════════════
+//  FILTRO DE INTERVENCIONES
+// ═══════════════════════════════════════════════════════════
+let intervencionesCache = [];
+let filtroActual = 'todos';
+
+async function cargarIntervenciones() {
+  const loading   = document.getElementById('intervenciones-loading');
+  const container = document.getElementById('intervenciones-container');
+  const empty     = document.getElementById('intervenciones-empty');
+  if(loading) loading.style.display='block';
+  if(container) container.innerHTML='';
+  if(empty) empty.style.display='none';
+
+  const{data,error}=await db.from('intervenciones').select('*').order('created_at',{ascending:false});
+  if(loading) loading.style.display='none';
+  if(error){showToast('Error al cargar intervenciones','error');return;}
+
+  intervencionesCache = data || [];
+  renderIntervenciones(intervencionesCache, filtroActual);
+}
+
+function filtrarIntervenciones(filtro, btn) {
+  filtroActual = filtro;
+
+  // Actualizar botones
+  document.querySelectorAll('.filtro-btn').forEach(b => {
+    b.style.background   = 'transparent';
+    b.style.borderColor  = 'var(--border)';
+    b.style.color        = 'var(--text-muted)';
+  });
+  if (btn) {
+    btn.style.background  = 'var(--accent)';
+    btn.style.borderColor = 'var(--accent)';
+    btn.style.color       = '#fff';
+  }
+
+  renderIntervenciones(intervencionesCache, filtro);
+}
+
+function renderIntervenciones(data, filtro) {
+  const container = document.getElementById('intervenciones-container');
+  const empty     = document.getElementById('intervenciones-empty');
+  if (!container) return;
+
+  const lista = filtro === 'todos' ? data : data.filter(i => i.estado === filtro);
+
+  if (!lista.length) {
+    container.innerHTML = '';
+    if (empty) empty.style.display = 'block';
+    return;
+  }
+  if (empty) empty.style.display = 'none';
+
+  container.innerHTML = lista.map(inv => {
+    const productos = inv.productos_usados || [];
+    return `<div class="intervencion-card" onclick="verIntervencion('${inv.id}')">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+        <div><div class="intervencion-matricula">${inv.matricula}</div><div class="intervencion-cliente">${inv.cliente_nombre}</div></div>
+        ${estadoBadge(inv.estado)}
+      </div>
+      <div class="intervencion-meta">
+        ${inv.nombre_servicio?`<span class="badge badge-gray">${inv.nombre_servicio}</span>`:''}
+        ${inv.horas_reales?`<span class="badge badge-blue">⏱ ${inv.horas_reales}h</span>`:''}
+        ${inv.precio_cobrado?`<span class="badge badge-green">💰 ${fmt(inv.precio_cobrado,2)} €</span>`:''}
+        ${productos.length>0?`<span class="badge badge-orange">🧴 ${productos.length} prod.</span>`:''}
+      </div>
+      <div style="font-size:0.73rem;color:var(--text-muted);margin-top:0.5rem;">${new Date(inv.created_at).toLocaleDateString('es-ES')}</div>
+    </div>`;
+  }).join('');
+}
