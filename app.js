@@ -694,7 +694,7 @@ async function cargarDashboard() {
   if(alertasEl)alertasEl.innerHTML=stockAlertas.length===0?'<div style="color:var(--success);font-size:0.85rem;">✓ Todo el stock en niveles correctos</div>':stockAlertas.map(p=>{const s=stockStatus(p.stock_actual??0,p.formato_ml);return `<div style="display:flex;justify-content:space-between;padding:0.4rem 0;border-bottom:1px solid var(--border);font-size:0.83rem;"><span>${s.icon} ${p.nombre_comercial}</span><span style="color:${s.color};font-weight:600;">${fmt(p.stock_actual??0,0)} ml · ${s.label}</span></div>`;}).join('');
   const ultimasEl=document.getElementById('dash-ultimas');
   if(ultimasEl)ultimasEl.innerHTML=(!intervTotal||!intervTotal.length)?'<div style="color:var(--text-muted);font-size:0.85rem;">Sin intervenciones aún</div>':intervTotal.map(i=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:0.5rem 0;border-bottom:1px solid var(--border);"><div><div style="font-family:'Barlow Condensed',sans-serif;font-size:1rem;font-weight:700;">${i.matricula}</div><div style="font-size:0.75rem;color:var(--text-muted);">${i.cliente_nombre} · ${i.nombre_servicio||'—'}</div></div><div style="text-align:right;">${estadoBadge(i.estado)}<div style="font-size:0.72rem;color:var(--text-muted);margin-top:0.2rem;">${new Date(i.created_at).toLocaleDateString('es-ES')}</div></div></div>`).join('');
-  renderTareasDashboard(tareas||[]);
+  renderTareasDashboard(tareas||[]); cargarGrafica();
 }
 
 function renderTareasDashboard(tareas) {
@@ -903,4 +903,99 @@ async function generarPDFHistorico() {
   doc.setFillColor(...negro);doc.rect(0,283,210,14,'F');doc.setFillColor(...azul);doc.rect(0,283,5,14,'F');
   doc.setTextColor(...grisClaro);doc.setFontSize(8);doc.text('BL Detail Center — Historial de Vehículo',12,292);
   doc.save(`historial_${q.replace(/\s/g,'_')}_${new Date().toISOString().split('T')[0]}.pdf`);showToast('✓ PDF historial generado');
+}
+
+// ═══════════════════════════════════════════════════════════
+//  GRÁFICA DE INGRESOS — ÚLTIMOS 6 MESES
+// ═══════════════════════════════════════════════════════════
+let graficaInstance = null;
+
+async function cargarGrafica() {
+  const loading = document.getElementById('dash-grafica-loading');
+  const canvas  = document.getElementById('dash-grafica');
+  if (!canvas) return;
+
+  // Calcular últimos 6 meses
+  const meses = [];
+  const ahora = new Date();
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(ahora.getFullYear(), ahora.getMonth() - i, 1);
+    meses.push({
+      label: d.toLocaleDateString('es-ES', { month: 'short', year: '2-digit' }),
+      inicio: new Date(d.getFullYear(), d.getMonth(), 1).toISOString(),
+      fin:    new Date(d.getFullYear(), d.getMonth() + 1, 0, 23, 59, 59).toISOString()
+    });
+  }
+
+  // Query todas las intervenciones de los últimos 6 meses
+  const { data, error } = await db
+    .from('intervenciones')
+    .select('precio_cobrado, created_at')
+    .gte('created_at', meses[0].inicio)
+    .not('precio_cobrado', 'is', null);
+
+  if (loading) loading.style.display = 'none';
+  if (error || !data) return;
+
+  // Agrupar por mes
+  const ingresosPorMes = meses.map(mes => {
+    const total = data
+      .filter(i => i.created_at >= mes.inicio && i.created_at <= mes.fin)
+      .reduce((s, i) => s + (i.precio_cobrado || 0), 0);
+    return total;
+  });
+
+  canvas.style.display = 'block';
+
+  // Destruir gráfica anterior si existe
+  if (graficaInstance) { graficaInstance.destroy(); graficaInstance = null; }
+
+  const ctx = canvas.getContext('2d');
+  graficaInstance = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: meses.map(m => m.label),
+      datasets: [{
+        label: 'Ingresos (€)',
+        data: ingresosPorMes,
+        backgroundColor: 'rgba(59,130,246,0.25)',
+        borderColor: 'rgba(59,130,246,0.9)',
+        borderWidth: 2,
+        borderRadius: 6,
+        borderSkipped: false,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: true,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: ctx => `${ctx.parsed.y.toFixed(2)} €`
+          },
+          backgroundColor: '#13181f',
+          borderColor: '#1e2d45',
+          borderWidth: 1,
+          titleColor: '#e8eef5',
+          bodyColor: '#3b82f6',
+          padding: 10,
+        }
+      },
+      scales: {
+        x: {
+          grid: { color: 'rgba(255,255,255,0.04)' },
+          ticks: { color: '#7a8fa8', font: { size: 11 } }
+        },
+        y: {
+          grid: { color: 'rgba(255,255,255,0.04)' },
+          ticks: {
+            color: '#7a8fa8', font: { size: 11 },
+            callback: val => `${val} €`
+          },
+          beginAtZero: true
+        }
+      }
+    }
+  });
 }
